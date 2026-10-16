@@ -1,0 +1,1 @@
+# junglegaming-frontend-challenge
