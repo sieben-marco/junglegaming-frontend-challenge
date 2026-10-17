@@ -1,4 +1,5 @@
 import { http, HttpResponse } from 'msw';
+import { authHandlers } from './auth';
 import { catalogHandlers } from './catalog';
 import { cartHandlers } from './cart';
 import { favoritesHandlers } from './favorites';
@@ -13,6 +14,7 @@ import { realtimeHandlers } from '../realtime';
  */
 export const handlers = [
   http.get('/api/health', () => HttpResponse.json({ status: 'ok' })),
+  ...authHandlers,
   ...catalogHandlers,
   ...cartHandlers,
   ...favoritesHandlers,

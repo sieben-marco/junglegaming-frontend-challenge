@@ -1,4 +1,4 @@
-import { resetMockDb } from './db';
+import { expireSessions, resetMockDb } from './db';
 import { changeNftPrice, connectedClientCount, disconnectClients, emitNftUpdate } from './realtime';
 import { mockScenarios, resetMockScenarios, type MockScenarioConfig } from './scenarios';
 
@@ -40,6 +40,11 @@ export interface KurioMockDevTools {
    * socket reconectar sozinho. Serve para exercitar a reconciliação.
    */
   disconnectClients: typeof disconnectClients;
+  /**
+   * Vence TODAS as sessões agora (o cliente continua com o token, mas o
+   * "servidor" o recusa) — para exercitar a expiração durante a navegação.
+   */
+  expireSessions: typeof expireSessions;
 }
 
 /** Disponibiliza as ferramentas em `window.__kurioMocks` (apenas em DEV). */
@@ -55,5 +60,6 @@ export function exposeMockDevTools(): void {
     emitNftUpdate,
     connectedClientCount,
     disconnectClients,
+    expireSessions,
   };
 }

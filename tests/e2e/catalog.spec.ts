@@ -40,5 +40,5 @@ test('favoritar no card sem sessão leva ao login mantendo a URL atual', async (
   await card.getByRole('button', { name: `Favoritar ${title}` }).click();
 
   await expect(page).toHaveURL(/\/entrar\?redirect=%2Fmercado/);
-  await expect(page.getByRole('heading', { level: 1, name: 'Entrar' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Entrar' })).toBeVisible();
 });

@@ -74,7 +74,7 @@ test('favoritar sem sessão encaminha para o login (401, com redirect)', async (
   await page.getByRole('button', { name: 'Favoritar' }).click();
 
   await expect(page).toHaveURL(new RegExp(`/entrar\\?redirect=%2Fnft%2F${NFT_ID}`));
-  await expect(page.getByRole('heading', { level: 1, name: 'Entrar' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Entrar' })).toBeVisible();
 });
 
 test('NFT inexistente mostra o estado de "não encontrado"', async ({ page }) => {

@@ -4,6 +4,7 @@ import { TanStackRouterDevtools } from '@tanstack/react-router-devtools';
 import { SiteFooter } from '@/components/layout/footer';
 import { Header } from '@/components/layout/header';
 import { NewsletterBand } from '@/components/layout/newsletter-band';
+import { useSessionBootstrap } from '@/features/auth/queries';
 import { useNftUpdates } from '@/features/realtime/use-nft-updates';
 
 export const Route = createRootRoute({
@@ -17,6 +18,10 @@ export const Route = createRootRoute({
 function RootLayout() {
   // Uma única assinatura de tempo real para o app inteiro (`nft.updated`).
   useNftUpdates();
+
+  // Uma única leitura da SESSÃO para o app inteiro: ao abrir/recarregar em
+  // qualquer tela, o app pergunta ao "servidor" quem é o dono do token guardado.
+  useSessionBootstrap();
 
   return (
     <div className="flex min-h-dvh flex-col">

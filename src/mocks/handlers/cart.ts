@@ -109,10 +109,10 @@ async function withMutationScenarios(): Promise<Response | null> {
 
 export const cartHandlers = [
   // Consulta do carrinho.
-  http.get('/api/cart', async () => {
+  http.get('/api/cart', async ({ request }) => {
     await delay(mockScenarios.cartLatencyMs);
     if (mockScenarios.networkError) return networkError();
-    return HttpResponse.json(buildCart(getCartScope()));
+    return HttpResponse.json(buildCart(getCartScope(request)));
   }),
 
   // Inclusão de item (faz merge se o NFT+edição já estiver no carrinho).
@@ -132,7 +132,7 @@ export const cartHandlers = [
     const edition = nft.editions.find((item) => item.id === body.editionId);
     if (!edition) return apiError(404, 'EDITION_NOT_FOUND', 'Edição indisponível para este NFT.');
 
-    const scope = getCartScope();
+    const scope = getCartScope(request);
     const record = getCartRecord(scope);
     const existing = findLine(record.lines, nft.id, edition.id);
     const nextQuantity = (existing?.quantity ?? 0) + (body.quantity ?? 1);
@@ -186,7 +186,7 @@ export const cartHandlers = [
     const invalid = validateQuantity(quantity, edition);
     if (invalid) return invalid;
 
-    const scope = getCartScope();
+    const scope = getCartScope(request);
     const record = getCartRecord(scope);
     if (!findLine(record.lines, nft.id, edition.id)) {
       return apiError(404, 'CART_ITEM_NOT_FOUND', 'Item não encontrado no carrinho.');
@@ -201,14 +201,14 @@ export const cartHandlers = [
   }),
 
   // Remoção de uma linha.
-  http.delete('/api/cart/items/:itemId', async ({ params }) => {
+  http.delete('/api/cart/items/:itemId', async ({ params, request }) => {
     const failed = await withMutationScenarios();
     if (failed) return failed;
 
     const parsed = parseCartItemId(String(params.itemId));
     if (!parsed) return apiError(404, 'CART_ITEM_NOT_FOUND', 'Item não encontrado no carrinho.');
 
-    const scope = getCartScope();
+    const scope = getCartScope(request);
     const record = getCartRecord(scope);
     if (!findLine(record.lines, parsed.nftId, parsed.editionId)) {
       return apiError(404, 'CART_ITEM_NOT_FOUND', 'Item não encontrado no carrinho.');
@@ -245,7 +245,7 @@ export const cartHandlers = [
       return apiError(422, 'COUPON_EXPIRED', 'Este código promocional expirou.');
     }
 
-    const scope = getCartScope();
+    const scope = getCartScope(request);
     mutateDb((draft) => {
       let cart = draft.carts[scope];
       if (!cart) {
@@ -259,11 +259,11 @@ export const cartHandlers = [
   }),
 
   // Remoção do cupom.
-  http.delete('/api/cart/coupon', async () => {
+  http.delete('/api/cart/coupon', async ({ request }) => {
     const failed = await withMutationScenarios();
     if (failed) return failed;
 
-    const scope = getCartScope();
+    const scope = getCartScope(request);
     mutateDb((draft) => {
       const cart = draft.carts[scope];
       if (cart) cart.couponCode = null;

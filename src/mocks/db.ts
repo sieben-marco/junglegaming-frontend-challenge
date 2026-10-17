@@ -1,4 +1,5 @@
 import type { NftEditionId } from '@/types/nft';
+import { USER_FIXTURES, type UserRecord } from './fixtures/users';
 
 /**
  * "Banco de dados" do servidor simulado (MSW).
@@ -40,21 +41,43 @@ export interface NftPatch {
   version: number;
 }
 
+/** Uma sessão aberta (o "servidor" guarda o token e até quando ele vale). */
+export interface SessionRecord {
+  userId: string;
+  /** Quando a sessão deixa de valer (epoch em ms) — o enunciado pede expiração. */
+  expiresAt: number;
+}
+
 interface MockDbState {
-  /** Um carrinho por escopo (visitante hoje; usuário após o login). */
+  /** Um carrinho por escopo (visitante ou usuário logado). */
   carts: Record<string, CartRecord>;
   /** Ids de NFTs favoritados, por id de usuário. */
   favorites: Record<string, string[]>;
   /** Alterações de NFTs, por id (o catálogo "de agora", não o fixture inicial). */
   nftPatches: Record<string, NftPatch>;
+  /** Contas do servidor (começa com as fixtures; o cadastro adiciona mais). */
+  users: UserRecord[];
+  /** Sessões abertas: token ⇒ usuário + validade. */
+  sessions: Record<string, SessionRecord>;
 }
 
 /** Chave de armazenamento + versão (mudou a forma ⇒ começa limpo). */
 export const MOCK_DB_STORAGE_KEY = 'kurio:mock-db';
-const MOCK_DB_VERSION = 2;
+const MOCK_DB_VERSION = 3;
+
+/** Quanto tempo uma sessão simulada dura (2 horas). */
+export const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 
 function createInitialState(): MockDbState {
-  return { carts: {}, favorites: {}, nftPatches: {} };
+  return {
+    carts: {},
+    favorites: {},
+    nftPatches: {},
+    // Copiamos as fixtures: o estado é MUTÁVEL (o cadastro empurra contas novas)
+    // e não queremos escrever no módulo de fixtures.
+    users: USER_FIXTURES.map((user) => ({ ...user })),
+    sessions: {},
+  };
 }
 
 function createEmptyCart(): CartRecord {
@@ -142,6 +165,88 @@ export function patchNftPrice(nftId: string, priceEth: string): NftPatch {
     draft.nftPatches[nftId] = next;
   });
   return next;
+}
+
+/* ---------------------------------------------------------------------------
+ * Contas e sessões (o "servidor" de autenticação)
+ * ------------------------------------------------------------------------- */
+
+/** Contas cadastradas no "servidor". */
+export function findUserByEmail(email: string): UserRecord | undefined {
+  const normalized = email.trim().toLowerCase();
+  return state.users.find((user) => user.email.trim().toLowerCase() === normalized);
+}
+
+export function findUserById(userId: string): UserRecord | undefined {
+  return state.users.find((user) => user.id === userId);
+}
+
+/** Cadastra uma conta nova (usado pelo cadastro — o id já vem pronto). */
+export function addUser(user: UserRecord): void {
+  mutateDb((draft) => {
+    draft.users.push(user);
+  });
+}
+
+/**
+ * Abre uma SESSÃO e devolve o token que o cliente deve guardar.
+ *
+ * Quem gera o token é o "servidor" (como aconteceria de verdade): o cliente só
+ * o repassa em `Authorization: Bearer <token>`.
+ */
+export function createSession(userId: string): { token: string; expiresAt: number } {
+  const token = createSessionToken();
+  const expiresAt = Date.now() + SESSION_TTL_MS;
+  mutateDb((draft) => {
+    draft.sessions[token] = { userId, expiresAt };
+  });
+  return { token, expiresAt };
+}
+
+/** Sessão de um token (ou `undefined` se o token não existe mais). */
+export function findSession(token: string): SessionRecord | undefined {
+  return state.sessions[token];
+}
+
+/** Encerra UMA sessão (logout). */
+export function removeSession(token: string): void {
+  mutateDb((draft) => {
+    delete draft.sessions[token];
+  });
+}
+
+/** Encerra TODAS as sessões de um usuário (ex.: troca de senha). */
+export function removeSessionsForUser(userId: string): void {
+  mutateDb((draft) => {
+    for (const [token, session] of Object.entries(draft.sessions)) {
+      if (session.userId === userId) delete draft.sessions[token];
+    }
+  });
+}
+
+/**
+ * Vence TODAS as sessões agora — ferramenta de dev/teste.
+ *
+ * Serve para exercitar o que o enunciado chama de "trate expiração durante a
+ * navegação": o token do cliente continua "existindo", mas o servidor o recusa.
+ */
+export function expireSessions(): number {
+  const expiredAt = Date.now() - 1;
+  const tokens = Object.keys(state.sessions);
+  mutateDb((draft) => {
+    for (const token of tokens) {
+      draft.sessions[token] = { ...draft.sessions[token], expiresAt: expiredAt };
+    }
+  });
+  return tokens.length;
+}
+
+function createSessionToken(): string {
+  const cryptoApi = globalThis.crypto;
+  if (cryptoApi && typeof cryptoApi.randomUUID === 'function') {
+    return `kurio_${cryptoApi.randomUUID()}`;
+  }
+  return `kurio_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
 }
 
 /** Restaura o cenário conhecido (usado por testes e por um botão de dev). */

@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { requireNft } from './support/data';
 import { headingOf, openDetail, successFeedback, visibleStepper } from './support/actions';
+import { submitLogin } from './support/auth';
 
 /**
  * Fluxos MOBILE (rodam no projeto `mobile-chromium`, viewport de celular).
@@ -29,4 +30,17 @@ test('o coração sobre a imagem favorita (e cai no login sem sessão)', async (
   await page.getByRole('button', { name: 'Adicionar aos favoritos' }).click();
 
   await expect(page).toHaveURL(new RegExp(`/entrar\\?redirect=%2Fnft%2F${NFT_ID}`));
+});
+
+test('entrar pelo login no mobile salva o favorito (sem voltar ao login)', async ({ page }) => {
+  await openDetail(page, NFT_ID);
+  await page.getByRole('button', { name: 'Adicionar aos favoritos' }).click();
+
+  // O MESMO modal de login (o Figma mostra uma tela própria no mobile; aqui o
+  // diálogo ocupa a largura disponível e rola se não couber).
+  await submitLogin(page);
+
+  await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
+  await page.getByRole('button', { name: 'Adicionar aos favoritos' }).click();
+  await expect(page.getByRole('button', { name: 'Remover dos favoritos' })).toBeVisible();
 });

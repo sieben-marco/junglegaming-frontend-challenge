@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
-import { PagePlaceholder } from '@/components/common/page-placeholder';
+import { LoginPage } from '@/features/auth/components/login-page';
 
 /**
  * Search param `redirect`: guarda PARA ONDE voltar depois do login. É o que o
@@ -20,14 +20,5 @@ export const Route = createFileRoute('/entrar')({
 function EntrarPage() {
   const { redirect } = Route.useSearch();
 
-  return (
-    <PagePlaceholder
-      title="Entrar"
-      description={
-        redirect
-          ? `Autenticação (login) com validação. Depois de entrar, você volta para ${redirect}. Em construção.`
-          : 'Autenticação (login) com validação e retorno ao fluxo anterior. Em construção.'
-      }
-    />
-  );
+  return <LoginPage redirect={redirect} />;
 }

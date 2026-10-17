@@ -9,20 +9,19 @@ import { apiError, networkError } from './http-utils';
 /**
  * Handlers REST de favoritos.
  *
- * O enunciado é explícito: favoritos pertencem a um USUÁRIO autenticado. Como a
- * etapa de sessão ainda não existe, `getCurrentUserId()` devolve `null` e estes
- * endpoints respondem 401 — a interface então encaminha para o login, em vez de
- * "fingir" que salvou. Quando o login entrar, nada aqui precisa mudar: basta a
- * sessão passar a resolver o usuário.
+ * O enunciado é explícito: favoritos pertencem a um USUÁRIO autenticado. A
+ * identidade vem do TOKEN da requisição (`getCurrentUserId(request)`): sem
+ * sessão a resposta é 401 e a interface encaminha para o login, em vez de
+ * "fingir" que salvou.
  *
- * Os favoritos já ficam ISOLADOS por usuário no banco (`favorites[userId]`),
- * o que evita vazamento de dados entre contas.
+ * Os favoritos ficam ISOLADOS por usuário no banco (`favorites[userId]`), o que
+ * evita vazamento de dados entre contas.
  */
 
 type AuthResult = { ok: true; userId: string } | { ok: false; response: Response };
 
-function requireUserId(): AuthResult {
-  const userId = getCurrentUserId();
+function requireUserId(request: Request): AuthResult {
+  const userId = getCurrentUserId(request);
   if (!userId) {
     return {
       ok: false,
@@ -46,11 +45,11 @@ async function privateLatency(): Promise<Response | null> {
 
 export const favoritesHandlers = [
   // Consulta dos favoritos do usuário da sessão.
-  http.get('/api/favorites', async () => {
+  http.get('/api/favorites', async ({ request }) => {
     const failed = await privateLatency();
     if (failed) return failed;
 
-    const auth = requireUserId();
+    const auth = requireUserId(request);
     if (!auth.ok) return auth.response;
 
     return HttpResponse.json(toResponse(auth.userId));
@@ -61,7 +60,7 @@ export const favoritesHandlers = [
     const failed = await privateLatency();
     if (failed) return failed;
 
-    const auth = requireUserId();
+    const auth = requireUserId(request);
     if (!auth.ok) return auth.response;
 
     const body = (await request.json()) as { nftId?: unknown };
@@ -85,11 +84,11 @@ export const favoritesHandlers = [
   }),
 
   // Remoção de um favorito.
-  http.delete('/api/favorites/:nftId', async ({ params }) => {
+  http.delete('/api/favorites/:nftId', async ({ params, request }) => {
     const failed = await privateLatency();
     if (failed) return failed;
 
-    const auth = requireUserId();
+    const auth = requireUserId(request);
     if (!auth.ok) return auth.response;
 
     const nftId = String(params.nftId);

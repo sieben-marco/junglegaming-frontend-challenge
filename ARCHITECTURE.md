@@ -75,10 +75,23 @@ Regras: `limite por pedido = min(disponível, maxPerOrder)`; taxa de rede fixa
 sem login respondem **401 `UNAUTHENTICATED`** e a UI encaminha para `/entrar`
 (com `redirect`). Ficam isolados por usuário em `db.favorites[userId]`.
 
+### Sessão e conta (IMPLEMENTADO — login)
+| Método | Rota | Observações |
+| --- | --- | --- |
+| POST | `/api/auth/login` | corpo `{ email, password }` ⇒ `{ user, token }`; 401 `INVALID_CREDENTIALS` (mesma resposta para e-mail inexistente e senha errada); 422 `VALIDATION_ERROR`. **Mescla o carrinho do visitante** no do usuário. |
+| GET | `/api/auth/session` | exige `Authorization: Bearer <token>`; ⇒ `{ user }`; 401 `UNAUTHENTICATED` / `SESSION_EXPIRED`. É o que **recupera a sessão após refresh**. |
+
+O token é criado pelo "servidor" (`db.createSession`, TTL de 2 h), guardado pelo
+cliente (`lib/auth-token.ts`) e reenviado pelo interceptor do Axios. A identidade
+das rotas privadas vem do cabeçalho (`session.getCurrentUserId(request)`), o que
+mantém carrinho e favoritos **isolados por usuário**.
+Contas de demonstração (fictícias, senha nunca em claro — só um digest):
+`ana@kurio.art` / `kurio123` e `bruno@kurio.art` / `kurio123`
+(`mocks/fixtures/users.ts`).
+
 ### Planejados
-Sessão/conta (cadastro, login, sessão, logout, expiração — inclui **mesclar o
-carrinho do visitante** ao autenticar), Cotação de checkout, Pedidos (criação
-**idempotente**), Perfil, Carteiras. Requisitos canônicos:
+Cadastro de conta (conflito de e-mail), logout, Perfil, Carteiras,
+Cotação de checkout, Pedidos (criação **idempotente**). Requisitos canônicos:
 `challenge-description/README.md` §5.
 
 ## 5. Estado na URL (catálogo)
@@ -100,8 +113,20 @@ desligado. Listagem usa `placeholderData: keepPreviousData` (evita "piscar" ao
 paginar/filtrar) e expõe `isPlaceholderData` para a UI indicar atualização.
 
 Chaves: `catalogKeys.list(search)` / `catalogKeys.detail(id)` /
-`catalogKeys.related(input)`; `cartKeys.detail()`; `favoritesKeys.list()`.
-Isolamento por parâmetros da consulta (e, na etapa de sessão, por usuário).
+`catalogKeys.related(input)`; `cartKeys.detail()`; `favoritesKeys.list()`;
+`authKeys.session()`. Isolamento por parâmetros da consulta e por **sessão**: o
+carrinho e os favoritos são do usuário do token (no "servidor"), e a UI decide
+"quem sou eu" com `useCurrentUser()` (token + `GET /auth/session`).
+
+**Sessão e troca de estado:** `useAuthToken()` lê o token como estado EXTERNO
+(`useSyncExternalStore` sobre `lib/auth-token.ts`). Quando o token muda (login,
+logout ou um 401 que o interceptor descartou), a sessão é invalidada e a UI volta
+sozinha ao estado de visitante. Após o login: `setQueryData` da sessão +
+invalidação de `cartKeys.all` (o "servidor" mesclou o carrinho do visitante) e
+`favoritesKeys.all` (agora existem de verdade). O layout raiz (`__root.tsx`)
+monta `useSessionBootstrap()` UMA vez: é ele que faz a sessão ser recuperada ao
+abrir/recarregar QUALQUER tela (sem isso, a recuperação dependeria de a tela
+por acaso ler a sessão).
 
 **Atualização otimista (`cart/queries.ts`, `favorites/queries.ts`):** padrão
 `onMutate` (snapshot + escrita do estado previsto) → `onError` (**rollback** para
@@ -121,8 +146,11 @@ servidor (`lib/cart-totals.ts`), evitando divergência. Cupom não é otimista
   escopo) e favoritos (por usuário) e **espelha em `localStorage`**
   (`kurio:mock-db`, com versão) ⇒ o carrinho **sobrevive ao refresh**.
   `mutateDb()` persiste; `resetMockDb()` restaura o cenário conhecido.
-- **Sessão simulada** (`session.ts`): hoje `getCurrentUserId()` ⇒ `null`, então
-  as rotas privadas respondem 401. A etapa de sessão só troca essa resolução.
+- **Sessão simulada** (`session.ts`): o usuário da requisição é resolvido pelo
+  token (`Authorization: Bearer`), contra as sessões abertas no banco (`users` +
+  `sessions`, persistidos). Sem token/validade ⇒ as rotas privadas respondem 401
+  e a UI encaminha para `/entrar` (com `redirect`). `expireSessions()` (dev tool)
+  força a expiração sem mexer no cliente.
 - Fixtures determinísticas (`fixtures/nfts.ts`, `fixtures/coupons.ts`, RNG com
   semente fixa) ⇒ testes estáveis e reset para cenário conhecido.
 - Cenários configuráveis (`scenarios.ts`): `catalogLatencyMs`, `catalogFailure`,
@@ -206,6 +234,14 @@ com rótulos e `aria-label` no carrinho; **região viva sempre montada no carrin
 carrinho." quando o tempo real remarca uma linha — o `aria-live` do resumo diz que
 os valores mudaram, esta região diz **por quê**.
 
+**Login:** é um diálogo de verdade (Base UI): foco preso enquanto aberto, `Esc` e
+X para fechar, foco devolvido a quem abriu, `role="dialog"` com nome acessível
+(o título "Entrar" é o `DialogTitle`). Os campos usam `aria-label` (o Figma não
+mostra rótulo), e cada erro de campo aparece em `<p>` ligado por
+`aria-describedby` + `aria-invalid`; o erro do servidor vai numa região
+`role="alert"`. O botão do "olho" é rotulado ("Mostrar/Ocultar senha") e o envio
+com teclado funciona sem rato.
+
 **Sem controles duplicados:** no mobile a quantidade/compra vivem SÓ na barra
 fixa e o favorito é um coração sobre a imagem (o painel fica `hidden md:block`).
 Antes havia dois grupos `aria-label="Quantidade de …"` na mesma tela.
@@ -244,6 +280,19 @@ Antes havia dois grupos `aria-label="Quantidade de …"` na mesma tela.
   reset do banco; os devtools do TanStack podem ser desligados com
   `VITE_DISABLE_DEVTOOLS="true"` (usado nos testes E2E, pois flutuavam sobre a
   barra de compra no mobile).
+- **Login (Figma: modal sobre a Home):** entregamos o modal (diálogo com foco
+  preso, `Esc` e X para sair) sobre o fundo escurecido, mas **sem renderizar a
+  Home por baixo** — a rota `/entrar` é a dona da tela, o que permite abrir o
+  login por link direto e retomar o fluxo com `?redirect=`.
+- **Login social:** os botões "Continuar com Google/Facebook" existem (o Figma
+  os mostra) mas ficam **desabilitados**, com explicação para leitor de tela —
+  integrar provedores reais está fora do escopo e um botão que "não faz nada"
+  aparentando funcionar seria um fluxo falso. `TODO(asset)`: ícones de marca
+  (aguardando o dev). "Esqueceu a senha?" apenas informa que não há recuperação
+  nesta demonstração (não simulamos envio de e-mail).
+- **Credenciais de demonstração** aparecem como legenda no formulário
+  (não existem no Figma): sem cadastro/e-mail real, o avaliador precisa saber
+  com que conta entrar.
 
 ## 11. Testes E2E (Playwright)
 
@@ -259,7 +308,14 @@ rodando". Como os mocks ligam em DEV, o teste exercita o app como em produção.
 - Cenários de falha (ex.: rollback do otimista) são ligados DENTRO da página via
   `window.__kurioMocks` — a UI não tem "caminho alternativo", quem falha é o
   "servidor".
-- **20 fluxos** cobrindo catálogo, detalhe, carrinho, tempo real e mobile.
+- **27 fluxos** cobrindo catálogo, detalhe, carrinho, sessão, tempo real e mobile.
+- **Sessão:** login (retorno ao fluxo anterior, validação no cliente sem ida à
+  rede, credenciais inválidas), **recuperação da sessão pelo token após refresh**
+  (o teste exige o 200 de `GET /api/auth/session` numa navegação do zero),
+  favorito **salvo de verdade + preservado após refresh**, carrinho do visitante
+  mesclado ao entrar e **expiração durante a navegação** (o "servidor" vence a
+  sessão no meio do fluxo e o app pede login de novo, retomando o contexto). Com
+  a mesclagem desligada no "servidor", o fluxo do carrinho FALHA (conferido).
 - **Tempo real sem janela de dúvida:** o fluxo de reconciliação derruba as
   conexões E muda o preço na MESMA ida ao "servidor"
   (`serverDropsConnectionsAndChangesPrice`) — assim não existe o instante em que
