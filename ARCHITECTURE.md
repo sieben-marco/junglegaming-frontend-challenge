@@ -12,9 +12,10 @@ componentes/hooks.
 
 ## 2. Stack
 
-React · TypeScript · TanStack Router (file-based) · TanStack Query · Axios ·
-MSW (+ `@mswjs/socket.io-binding`) · Socket.IO client · Tailwind CSS v4 ·
-shadcn/ui (Base UI) · **zod** (validação) · Playwright/Lighthouse (a instalar).
+React · TypeScript (**estrito**: `strict: true`) · TanStack Router (file-based)
+· TanStack Query · Axios · MSW (+ `@mswjs/socket.io-binding`) · Socket.IO client
+· Tailwind CSS v4 · shadcn/ui (Base UI) · **zod** (validação) ·
+Playwright/Lighthouse (a instalar).
 
 ## 3. Estrutura de pastas
 
