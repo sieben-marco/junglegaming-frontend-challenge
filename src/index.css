@@ -1,1 +1,130 @@
 @import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+@import '@fontsource-variable/geist';
+
+/*
+ * Tema do Kurio (marketplace de NFTs).
+ * Dark-first: a aplicação inteira usa fundo quase preto e acento laranja.
+ * As cores abaixo foram amostradas diretamente das imagens do Figma
+ * (challenge-description/design). Ver AGENTS.md > seção 5.
+ */
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+  --font-heading: var(--font-sans);
+  --font-sans: 'Geist Variable', sans-serif;
+}
+
+:root {
+  color-scheme: dark;
+
+  --radius: 0.75rem;
+
+  /* Base — fundo quase preto de tom quente e texto creme. */
+  --background: #140d0a;
+  --foreground: #f5f1eb;
+
+  /* Superfícies (cards, sidebar, modais). */
+  --card: #241612;
+  --card-foreground: #f5f1eb;
+  --popover: #241612;
+  --popover-foreground: #f5f1eb;
+
+  /* Acento principal (laranja Kurio). */
+  --primary: #d28a4c;
+  --primary-foreground: #1a0f08;
+
+  /* Superfícies secundárias. */
+  --secondary: #2e1d16;
+  --secondary-foreground: #f5f1eb;
+
+  --muted: #2a1a14;
+  --muted-foreground: #9b8b7d;
+
+  --accent: #3a2418;
+  --accent-foreground: #f5f1eb;
+
+  /* Feedback. */
+  --destructive: #e5484d;
+  --destructive-foreground: #f5f1eb;
+  --success: #4c9a6a;
+  --success-foreground: #0c1a11;
+  --warning: #d9a24c;
+  --warning-foreground: #1a1206;
+
+  /* Bordas e foco. */
+  --border: #3f2319;
+  --input: #3f2319;
+  --ring: #d28a4c;
+
+  --chart-1: #d28a4c;
+  --chart-2: #e89b55;
+  --chart-3: #9b8b7d;
+  --chart-4: #6b4a2f;
+  --chart-5: #3f2319;
+
+  --sidebar: #1b110d;
+  --sidebar-foreground: #f5f1eb;
+  --sidebar-primary: #d28a4c;
+  --sidebar-primary-foreground: #1a0f08;
+  --sidebar-accent: #2e1d16;
+  --sidebar-accent-foreground: #f5f1eb;
+  --sidebar-border: #3f2319;
+  --sidebar-ring: #d28a4c;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+  html {
+    @apply font-sans;
+  }
+}
