@@ -4,6 +4,7 @@ import { TanStackRouterDevtools } from '@tanstack/react-router-devtools';
 import { SiteFooter } from '@/components/layout/footer';
 import { Header } from '@/components/layout/header';
 import { NewsletterBand } from '@/components/layout/newsletter-band';
+import { useNftUpdates } from '@/features/realtime/use-nft-updates';
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -14,6 +15,9 @@ export const Route = createRootRoute({
  * (header, footer, fundo) fica aqui. A rota atual é renderizada no <Outlet />.
  */
 function RootLayout() {
+  // Uma única assinatura de tempo real para o app inteiro (`nft.updated`).
+  useNftUpdates();
+
   return (
     <div className="flex min-h-dvh flex-col">
       <Header />

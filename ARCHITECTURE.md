@@ -129,18 +129,48 @@ servidor (`lib/cart-totals.ts`), evitando divergência. Cupom não é otimista
 - Ativação por configuração: `enableMocking()` liga em DEV e no build de
   demonstração (`VITE_ENABLE_MOCKS="true"`); `onUnhandledRequest: 'bypass'`.
 - **Limitação de transporte (Socket.IO):** o MSW intercepta **WebSocket**, então
-  o client força `transports: ['websocket']`. Documentar/preservar isso na etapa
-  de tempo real.
+  o client força `transports: ['websocket']` (o padrão do Socket.IO começa em
+  "polling" HTTP) e **carrega o `socket.io-client` por import dinâmico**
+  (`lib/socket.ts`): o `engine.io-client` guarda `globalThis.WebSocket` numa
+  constante ao ser avaliado, e precisa enxergar o WebSocket já interceptado.
+  Ver §8.
 
-## 8. Tempo real (planejado)
+## 8. Tempo real (Socket.IO)
 
-Eventos `nft.updated` (preço/disponibilidade) e `order.updated` (estado do
-pedido), com identidade estável + versão; tolerância a duplicatas/eventos
-antigos; reconciliação com REST após reconexão.
+**Implementado: `nft.updated` (preço).** Pendente: refletir no carrinho + avisar
+"o preço mudou"; reconciliação com REST na reconexão; `order.updated` (depende do
+checkout); mudança de disponibilidade (junto do cenário de estoque).
 
-As chaves já estão preparadas para isso: invalidar `['catalog']` atualiza
-catálogo, detalhe e avaliações; `cartKeys` já expõe `updatedAt` na resposta e o
-carrinho detecta mudança de preço (`unitPriceWhenAddedEth`).
+- **Contrato** (`types/realtime.ts`): `{ resource: 'nft', id, version, priceEth,
+  updatedAt }` — identidade estável, recurso afetado e **versão monotônica por
+  recurso**.
+- **Servidor simulado** (`mocks/realtime.ts`): `ws.link('/')` + `toSocketIo`
+  (`@mswjs/socket.io-binding`) traduz o protocolo (engine.io/socket.io-parser) e
+  emite o handshake automaticamente. O "servidor" guarda as conexões abertas e
+  transmite por elas (o binding não implementa rooms/broadcast). `changeNftPrice`
+  altera o preço no "banco" (`db.nftPatches`) **e** emite o evento — REST e
+  socket contam a mesma história (`mocks/nft-state.ts` é a única fonte que os
+  handlers REST leem).
+- **Cliente** (`features/realtime/use-nft-updates.ts`, montado 1× no
+  `__root.tsx`): mantém a última versão aplicada por NFT e **ignora duplicatas e
+  eventos antigos** (`version <= aplicada`); aplica o dado no cache
+  (`setQueryData` do detalhe + `setQueriesData` das listagens/carrosséis) sem
+  refetch. REST continua sendo a verdade: um refetch devolve o mesmo valor.
+- **Gatilhos em DEV** (`mocks/dev-tools.ts` → `window.__kurioMocks`):
+  `changeNftPrice` (ação do servidor), `emitNftUpdate` (reentrega um evento, para
+  duplicata/fora de ordem) e `connectedClientCount` (o teste espera o socket
+  conectar sem `waitForTimeout`).
+- **Detalhes do MSW que exigiram cuidado** (ver AGENTS.md §9): (1) ao casar a
+  URL, o MSW remove a query e normaliza o caminho `/socket.io/` para `/`, logo o
+  padrão do `ws.link` é `'/'` (e o handler dá passthrough em quem não é
+  Socket.IO, ex.: o HMR do Vite); (2) o `path-to-regexp` desta versão **não
+  aceita RegExp**, então nada de `ws.link(/.../)`; (3) `connection.client.socket`
+  (fora do protocolo público) fornece o `readyState` usado para descartar
+  conexões mortas.
+
+As chaves já estavam preparadas: invalidar `['catalog']` atualiza catálogo,
+detalhe e avaliações; `cartKeys` expõe `updatedAt` e o carrinho detecta mudança
+de preço (`unitPriceWhenAddedEth`).
 
 ## 9. Acessibilidade
 

@@ -30,19 +30,31 @@ export interface CartRecord {
   couponCode: string | null;
 }
 
+/**
+ * Alteração de um NFT feita "em produção" (ex.: preço mudou durante a
+ * navegação). Guardamos a versão porque ela é o critério de ordem dos eventos:
+ * uma versão menor/igual à aplicada deve ser IGNORADA.
+ */
+export interface NftPatch {
+  priceEth: string;
+  version: number;
+}
+
 interface MockDbState {
   /** Um carrinho por escopo (visitante hoje; usuário após o login). */
   carts: Record<string, CartRecord>;
   /** Ids de NFTs favoritados, por id de usuário. */
   favorites: Record<string, string[]>;
+  /** Alterações de NFTs, por id (o catálogo "de agora", não o fixture inicial). */
+  nftPatches: Record<string, NftPatch>;
 }
 
 /** Chave de armazenamento + versão (mudou a forma ⇒ começa limpo). */
 export const MOCK_DB_STORAGE_KEY = 'kurio:mock-db';
-const MOCK_DB_VERSION = 1;
+const MOCK_DB_VERSION = 2;
 
 function createInitialState(): MockDbState {
-  return { carts: {}, favorites: {} };
+  return { carts: {}, favorites: {}, nftPatches: {} };
 }
 
 function createEmptyCart(): CartRecord {
@@ -111,6 +123,25 @@ export function getFavoriteIds(userId: string): string[] {
   const created: string[] = [];
   state.favorites[userId] = created;
   return created;
+}
+
+/** Alteração vigente de um NFT (ou `undefined` se ele está como no fixture). */
+export function getNftPatch(nftId: string): NftPatch | undefined {
+  return state.nftPatches[nftId];
+}
+
+/**
+ * Registra um novo PREÇO para um NFT e devolve o patch vigente.
+ *
+ * A versão é incrementada a cada mudança — é o que permite ao cliente
+ * descartar eventos duplicados ou que chegaram fora de ordem.
+ */
+export function patchNftPrice(nftId: string, priceEth: string): NftPatch {
+  const next: NftPatch = { priceEth, version: (state.nftPatches[nftId]?.version ?? 0) + 1 };
+  mutateDb((draft) => {
+    draft.nftPatches[nftId] = next;
+  });
+  return next;
 }
 
 /** Restaura o cenário conhecido (usado por testes e por um botão de dev). */

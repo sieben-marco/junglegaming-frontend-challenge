@@ -1,7 +1,7 @@
 import { delay, http, HttpResponse } from 'msw';
 import type { FavoritesResponse } from '@/types/favorite';
 import { getFavoriteIds, mutateDb } from '../db';
-import { findNftById } from '../fixtures/nfts';
+import { findNft } from '../nft-state';
 import { mockScenarios } from '../scenarios';
 import { getCurrentUserId } from '../session';
 import { apiError, networkError } from './http-utils';
@@ -34,7 +34,7 @@ function requireUserId(): AuthResult {
 
 function toResponse(userId: string): FavoritesResponse {
   // Só devolvemos NFTs que ainda existem no catálogo.
-  const nftIds = getFavoriteIds(userId).filter((id) => findNftById(id) !== undefined);
+  const nftIds = getFavoriteIds(userId).filter((id) => findNft(id) !== undefined);
   return { nftIds };
 }
 
@@ -68,7 +68,7 @@ export const favoritesHandlers = [
     if (typeof body.nftId !== 'string') {
       return apiError(422, 'VALIDATION_ERROR', 'Informe o NFT a favoritar.');
     }
-    if (!findNftById(body.nftId)) {
+    if (!findNft(body.nftId)) {
       return apiError(404, 'NFT_NOT_FOUND', 'NFT não encontrado.');
     }
 

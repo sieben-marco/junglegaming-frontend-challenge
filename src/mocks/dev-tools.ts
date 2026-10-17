@@ -1,4 +1,5 @@
 import { resetMockDb } from './db';
+import { changeNftPrice, connectedClientCount, emitNftUpdate } from './realtime';
 import { mockScenarios, resetMockScenarios, type MockScenarioConfig } from './scenarios';
 
 /**
@@ -23,8 +24,17 @@ export interface KurioMockDevTools {
   scenarios: MockScenarioConfig;
   /** Restaura o cenário padrão (determinístico). */
   resetScenarios: () => void;
-  /** Restaura o "banco" simulado (carrinho e favoritos). */
+  /** Restaura o "banco" simulado (carrinho, favoritos e mudanças de NFT). */
   resetDb: () => void;
+  /**
+   * Ação do "SERVIDOR": muda o preço de um NFT e emite `nft.updated` para quem
+   * estiver conectado (o evento chega pelo socket de verdade).
+   */
+  changeNftPrice: typeof changeNftPrice;
+  /** Reenvia um evento JÁ gerado — para testar duplicata/evento fora de ordem. */
+  emitNftUpdate: typeof emitNftUpdate;
+  /** Conexões Socket.IO abertas (o "servidor" vê quem está escutando). */
+  connectedClientCount: typeof connectedClientCount;
 }
 
 /** Disponibiliza as ferramentas em `window.__kurioMocks` (apenas em DEV). */
@@ -36,5 +46,8 @@ export function exposeMockDevTools(): void {
     scenarios: mockScenarios,
     resetScenarios: resetMockScenarios,
     resetDb: resetMockDb,
+    changeNftPrice,
+    emitNftUpdate,
+    connectedClientCount,
   };
 }

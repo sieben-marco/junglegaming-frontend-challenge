@@ -3,7 +3,7 @@ import { computeCartTotals } from '@/lib/cart-totals';
 import { multiplyEth, sumEth } from '@/lib/eth';
 import type { AddCartItemInput, Cart, CartItem, UpdateCartItemInput } from '@/types/cart';
 import { NFT_EDITION_IDS, type Nft, type NftEditionId } from '@/types/nft';
-import { findNftById } from '../fixtures/nfts';
+import { findNft } from '../nft-state';
 import { findCoupon } from '../fixtures/coupons';
 import { getCartRecord, mutateDb, type CartLineRecord } from '../db';
 import { mockScenarios } from '../scenarios';
@@ -29,7 +29,7 @@ export function buildCart(scope: string): Cart {
   const items: CartItem[] = [];
 
   for (const line of record.lines) {
-    const nft = findNftById(line.nftId);
+    const nft = findNft(line.nftId);
     // NFT/edição que saiu do catálogo: linha órfã é ignorada (não quebra a tela).
     const edition = nft?.editions.find((item) => item.id === line.editionId);
     if (!nft || !edition) continue;
@@ -126,7 +126,7 @@ export const cartHandlers = [
       return apiError(422, 'VALIDATION_ERROR', 'Informe o NFT e a edição.');
     }
 
-    const nft = findNftById(body.nftId);
+    const nft = findNft(body.nftId);
     if (!nft) return apiError(404, 'NFT_NOT_FOUND', 'NFT não encontrado.');
 
     const edition = nft.editions.find((item) => item.id === body.editionId);
@@ -173,7 +173,7 @@ export const cartHandlers = [
       return apiError(404, 'CART_ITEM_NOT_FOUND', 'Item não encontrado no carrinho.');
     }
 
-    const nft = findNftById(parsed.nftId);
+    const nft = findNft(parsed.nftId);
     const edition = nft?.editions.find((item) => item.id === parsed.editionId);
     if (!nft || !edition) return apiError(404, 'CART_ITEM_NOT_FOUND', 'Item não encontrado no carrinho.');
 

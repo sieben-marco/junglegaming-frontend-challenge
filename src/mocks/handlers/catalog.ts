@@ -1,6 +1,7 @@
 import { delay, http, HttpResponse } from 'msw';
 import type { Nft, NftFacets, NftListResponse, NftReviewsResponse } from '@/types/nft';
-import { COLLECTIONS, NETWORKS, NFTS, NFT_PAGE_SIZE, NFT_PRICE_BOUNDS, findReviewsByNft } from '../fixtures/nfts';
+import { COLLECTIONS, NETWORKS, NFT_PAGE_SIZE, NFT_PRICE_BOUNDS, findReviewsByNft } from '../fixtures/nfts';
+import { findNft, listNfts } from '../nft-state';
 import { mockScenarios } from '../scenarios';
 import { apiError, networkError } from './http-utils';
 
@@ -79,11 +80,15 @@ export const catalogHandlers = [
     const page = Math.max(1, parseNumber(url.searchParams.get('page')) ?? 1);
     const pageSize = Math.max(1, parseNumber(url.searchParams.get('pageSize')) ?? NFT_PAGE_SIZE);
 
-    // Quando as facetas são calculadas sobre TODAS as fixtures, os filtros não
-    // "somem" ao selecionar um item (comportamento esperado de marketplace).
-    const facets = buildFacets(NFTS);
+    // O catálogo "DE AGORA" (fixtures + alterações de tempo real). Os filtros,
+    // a ordenação e as facetas usam esta mesma visão que o REST devolve.
+    const catalog = listNfts();
 
-    let items = mockScenarios.catalogEmpty ? ([] as Nft[]) : [...NFTS];
+    // Quando as facetas são calculadas sobre TODO o catálogo, os filtros não
+    // "somem" ao selecionar um item (comportamento esperado de marketplace).
+    const facets = buildFacets(catalog);
+
+    let items = mockScenarios.catalogEmpty ? ([] as Nft[]) : catalog;
 
     if (q) items = items.filter((nft) => `${nft.name} #${nft.number}`.toLowerCase().includes(q));
     if (tab === 'new') items = items.filter((nft) => nft.isNew);
@@ -119,7 +124,7 @@ export const catalogHandlers = [
 
     if (mockScenarios.networkError) return networkError();
 
-    const nft = NFTS.find((item) => item.id === params.id);
+    const nft = findNft(String(params.id));
     if (!nft) {
       return apiError(404, 'NFT_NOT_FOUND', 'NFT não encontrado.');
     }
@@ -133,7 +138,7 @@ export const catalogHandlers = [
 
     if (mockScenarios.networkError) return networkError();
 
-    const nft = NFTS.find((item) => item.id === params.id);
+    const nft = findNft(String(params.id));
     if (!nft) {
       return apiError(404, 'NFT_NOT_FOUND', 'NFT não encontrado.');
     }
