@@ -1,9 +1,9 @@
 import { Link } from '@tanstack/react-router';
-import { Eye, Heart, ShoppingCart } from 'lucide-react';
-import { cn } from 'cn';
+import { Eye } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { Nft } from '@/types/nft';
 import { formatEthLabel } from '../format';
+import { NftCardActions } from './nft-card-actions';
 import { NftImage } from './nft-image';
 
 const RARITY_LABEL: Record<NonNullable<Nft['rarity']>, string> = {
@@ -56,15 +56,11 @@ export function NftCard({ nft }: { nft: Nft }) {
         className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       />
 
-      {/* Ações do design (aparecem no hover/foco). Carrinho e favorito entram nas
-          próximas etapas: por ora ficam DESABILITADAS para não fingir sucesso. */}
+      {/* Ações do design (aparecem no hover/foco): carrinho, favorito e detalhe.
+          As duas primeiras são AÇÕES reais (componente conectado); a terceira é
+          um link para a página do NFT. */}
       <div className="pointer-events-none absolute top-3 right-3 z-20 flex flex-col gap-2 opacity-0 transition-opacity group-hover/card:pointer-events-auto group-hover/card:opacity-100 group-focus-within/card:pointer-events-auto group-focus-within/card:opacity-100">
-        <button type="button" disabled aria-label="Adicionar ao carrinho (em breve)" title="Em breve" className={cn(ACTION_CLASS, 'cursor-not-allowed opacity-50')}>
-          <ShoppingCart className="size-4" />
-        </button>
-        <button type="button" disabled aria-label="Favoritar (em breve)" title="Em breve" className={cn(ACTION_CLASS, 'cursor-not-allowed opacity-50')}>
-          <Heart className="size-4" />
-        </button>
+        <NftCardActions nft={nft} buttonClassName={ACTION_CLASS} />
         <Link to="/nft/$nftId" params={{ nftId: nft.id }} aria-label={`Ver detalhes de ${title}`} className={ACTION_CLASS}>
           <Eye className="size-4" />
         </Link>

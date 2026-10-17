@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { maxQuantityFor, pickDefaultEdition } from '@/lib/nft-editions';
 import type { Nft, NftEdition, NftEditionId } from '@/types/nft';
 
 /**
@@ -23,11 +24,7 @@ export interface PurchaseSelection {
   isSoldOut: boolean;
 }
 
-/** Edição inicial: a primeira com estoque; se todas esgotaram, a primeira. */
-function pickDefaultEdition(nft: Nft): NftEdition {
-  return nft.editions.find((edition) => edition.available > 0) ?? nft.editions[0];
-}
-
+/** Seleção de compra (edição + quantidade) do detalhe. */
 export function usePurchaseSelection(nft: Nft): PurchaseSelection {
   const [editionId, setEditionId] = useState(() => pickDefaultEdition(nft).id);
   const [rawQuantity, setRawQuantity] = useState(1);
@@ -35,8 +32,8 @@ export function usePurchaseSelection(nft: Nft): PurchaseSelection {
   const edition = nft.editions.find((item) => item.id === editionId) ?? pickDefaultEdition(nft);
 
   // O "limite de quantidade" do enunciado é o MENOR entre o estoque e o teto
-  // por pedido daquela edição.
-  const maxQuantity = Math.min(edition.available, edition.maxPerOrder);
+  // por pedido daquela edição (mesma regra usada pelo card e pelo servidor).
+  const maxQuantity = maxQuantityFor(edition);
   const isSoldOut = maxQuantity <= 0;
 
   // Mantemos sempre um valor exibível (>= 1), mesmo esgotado.
