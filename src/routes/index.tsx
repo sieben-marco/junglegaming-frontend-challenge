@@ -1,13 +1,22 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute, Link, stripSearchParams } from '@tanstack/react-router';
 import { ArrowRight } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { cn } from 'cn';
+import { NftCatalog } from '@/features/catalog/components/nft-catalog';
+import { DEFAULT_CATALOG_SEARCH, catalogSearchSchema } from '@/features/catalog/search-params';
 
 export const Route = createFileRoute('/')({
+  // A Início também hospeda o catálogo; logo, também lê/escreve os mesmos
+  // search params (busca, filtros, ordenação e página).
+  validateSearch: catalogSearchSchema,
+  search: { middlewares: [stripSearchParams(DEFAULT_CATALOG_SEARCH)] },
   component: HomePage,
 });
 
 function HomePage() {
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
+
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-8 sm:px-6">
       <section className="overflow-hidden rounded-2xl bg-card">
@@ -31,11 +40,24 @@ function HomePage() {
               Explorar <ArrowRight />
             </Link>
           </div>
-          <div
-            aria-hidden
-            className="min-h-56 rounded-xl bg-gradient-to-br from-secondary via-muted to-accent"
+          <img
+            src="/nfts/nft-artwork-03.png"
+            alt="NFT em destaque: macaco de jaqueta verde e óculos escuros"
+            className="min-h-56 w-full rounded-xl object-cover"
           />
         </div>
+      </section>
+
+      <section className="mt-10 space-y-6">
+        <div className="space-y-1">
+          <p className="text-sm text-primary">Catálogo</p>
+          <h2 className="text-2xl font-semibold tracking-tight">Descubra novos NFTs</h2>
+        </div>
+
+        <NftCatalog
+          search={search}
+          onSearchChange={(patch) => void navigate({ search: (prev) => ({ ...prev, ...patch }) })}
+        />
       </section>
     </div>
   );

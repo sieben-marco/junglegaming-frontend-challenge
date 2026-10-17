@@ -128,3 +128,36 @@
     @apply font-sans;
   }
 }
+
+/*
+ * Skeleton "shimmer": um brilho que atravessa o bloco de carregamento.
+ * Usado pelo componente <Shimmer /> (src/components/common/shimmer.tsx).
+ */
+@layer components {
+  .shimmer {
+    background-image: linear-gradient(
+      90deg,
+      transparent 20%,
+      color-mix(in oklab, var(--foreground) 7%, transparent) 50%,
+      transparent 80%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.6s linear infinite;
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* Acessibilidade: sem animação para quem prefere movimento reduzido. */
+@media (prefers-reduced-motion: reduce) {
+  .shimmer {
+    animation: none;
+  }
+}
