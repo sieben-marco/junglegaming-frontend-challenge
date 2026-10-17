@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Page, type Request } from '@playwright/test';
 import type { NftUpdateEvent } from '../../../src/types/realtime';
 
 /**
@@ -51,4 +51,48 @@ export async function serverReplaysNftUpdate(page: Page, event: NftUpdateEvent):
     if (!tools) throw new Error('window.__kurioMocks não está disponível (mocks desligados?)');
     tools.emitNftUpdate(payload);
   }, event);
+}
+
+/**
+ * Espera o carrinho "sossegar": nenhuma busca de `GET /api/cart` em voo.
+ *
+ * POR QUE ISTO EXISTE (teste que "morde"): ao adicionar algo, o carrinho é
+ * INVALIDADO e uma nova busca dispara. Se a resposta dessa busca chegasse DEPOIS
+ * do evento de preço, ela já viria com o preço NOVO (o "servidor" muda o banco
+ * antes de responder) e o teste passaria SEM exercitar a atualização que o
+ * evento faz no cliente — teste que passa por acaso esconde bug (AGENTS.md §9).
+ * Só com o carrinho quieto o evento pode ser disparado com honestidade.
+ *
+ * O contador acompanha as buscas EM VOO (enviadas − respondidas/falhadas) e
+ * exige uma janela curta de estabilidade, para não confundir "ainda não começou"
+ * com "já terminou".
+ */
+export async function waitForCartFetchToSettle(page: Page): Promise<void> {
+  const isCartFetch = (request: Request): boolean =>
+    request.method() === 'GET' && new URL(request.url()).pathname === '/api/cart';
+
+  let inFlight = 0;
+  let idleSince: number | null = null;
+
+  page.on('request', (request) => {
+    if (isCartFetch(request)) {
+      inFlight += 1;
+      idleSince = null;
+    }
+  });
+  page.on('response', (response) => {
+    if (isCartFetch(response.request())) inFlight = Math.max(0, inFlight - 1);
+  });
+  page.on('requestfailed', (request) => {
+    if (isCartFetch(request)) inFlight = Math.max(0, inFlight - 1);
+  });
+
+  /** 300 ms sem nenhuma busca em voo = o carrinho está parado. */
+  await expect
+    .poll(() => {
+      if (inFlight > 0) return false;
+      idleSince ??= Date.now();
+      return Date.now() - idleSince >= 300;
+    })
+    .toBe(true);
 }

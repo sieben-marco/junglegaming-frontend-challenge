@@ -110,6 +110,10 @@ servidor). O estado previsto do carrinho reusa a MESMA função de totais do
 servidor (`lib/cart-totals.ts`), evitando divergência. Cupom não é otimista
 (quem define percentual é o servidor).
 
+**Eventos de tempo real** (`features/cart/realtime.ts` via listener do §8) não são
+"otimistas": o dado é autoritativo, então escrevem o valor previsto no cache
+(`setQueryData`) e **não** há rollback — se o REST discordar, um refetch corrige.
+
 ## 7. MSW — estratégia de mocking
 
 - Handlers em `src/mocks/handlers/` (por domínio), combinados em `index.ts`.
@@ -137,9 +141,9 @@ servidor (`lib/cart-totals.ts`), evitando divergência. Cupom não é otimista
 
 ## 8. Tempo real (Socket.IO)
 
-**Implementado: `nft.updated` (preço).** Pendente: refletir no carrinho + avisar
-"o preço mudou"; reconciliação com REST na reconexão; `order.updated` (depende do
-checkout); mudança de disponibilidade (junto do cenário de estoque).
+**Implementado: `nft.updated` (preço) — catálogo, detalhe e CARRINHO.** Pendente:
+reconciliação com REST na reconexão; `order.updated` (depende do checkout); mudança
+de disponibilidade (junto do cenário de estoque).
 
 - **Contrato** (`types/realtime.ts`): `{ resource: 'nft', id, version, priceEth,
   updatedAt }` — identidade estável, recurso afetado e **versão monotônica por
@@ -156,6 +160,13 @@ checkout); mudança de disponibilidade (junto do cenário de estoque).
   eventos antigos** (`version <= aplicada`); aplica o dado no cache
   (`setQueryData` do detalhe + `setQueriesData` das listagens/carrosséis) sem
   refetch. REST continua sendo a verdade: um refetch devolve o mesmo valor.
+- **Carrinho** (`features/cart/realtime.ts`): `applyNftPriceToCart` aplica o mesmo
+  evento na chave `cartKeys.detail()` quando o NFT é uma linha — troca
+  `unitPriceEth`, refaz `lineTotalEth` e o resumo com as **mesmas funções puras do
+  "servidor"** (`lib/eth` + `lib/cart-totals` via `withRecalculatedTotals`), sem
+  fórmula paralela. Devolve o MESMO objeto quando nada mudou (sem re-render
+  inútil). `unitPriceWhenAddedEth` é preservado de propósito: é a divergência
+  entre ele e o preço atual que faz a linha avisar "Preço atualizado para …".
 - **Gatilhos em DEV** (`mocks/dev-tools.ts` → `window.__kurioMocks`):
   `changeNftPrice` (ação do servidor), `emitNftUpdate` (reentrega um evento, para
   duplicata/fora de ordem) e `connectedClientCount` (o teste espera o socket
@@ -184,7 +195,10 @@ Novos: `QuantityStepper` (grupo rotulado + `<output aria-live>` + botões
 "Diminuir/Aumentar …"); abas com `role=tablist` (Base UI) e navegação por setas;
 `RatingStars` com texto alternativo (nota média) em vez de "★★★★☆"; carrossel com
 `aria-label`, setas rotuladas e pontos com `aria-current`; barra fixa do mobile
-com rótulos e `aria-label` no carrinho.
+com rótulos e `aria-label` no carrinho; **região viva sempre montada no carrinho**
+(`role="status"` sr-only) que anuncia "Preço atualizado em N item(ns) do
+carrinho." quando o tempo real remarca uma linha — o `aria-live` do resumo diz que
+os valores mudaram, esta região diz **por quê**.
 
 **Sem controles duplicados:** no mobile a quantidade/compra vivem SÓ na barra
 fixa e o favorito é um coração sobre a imagem (o painel fica `hidden md:block`).
@@ -239,6 +253,13 @@ rodando". Como os mocks ligam em DEV, o teste exercita o app como em produção.
 - Cenários de falha (ex.: rollback do otimista) são ligados DENTRO da página via
   `window.__kurioMocks` — a UI não tem "caminho alternativo", quem falha é o
   "servidor".
+- **19 fluxos** cobrindo catálogo, detalhe, carrinho, tempo real e mobile.
+- **Teste que "morde":** antes de disparar um evento de tempo real, o fluxo espera
+  o carrinho "sossegar" (`waitForCartFetchToSettle`, nenhum `GET /api/cart` em
+  voo). Sem isso, a resposta de uma busca disparada pelo "adicionar" chegava
+  DEPOIS do evento já com o preço novo e o teste passava por acaso (ver AGENTS.md
+  §9). Com o patch do cliente desligado, o fluxo FALHA — a prova de que ele mede o
+  que diz medir.
 - Em falha: screenshot, vídeo e `trace`; relatório HTML (`playwright-report`).
 
 ## 12. Comandos

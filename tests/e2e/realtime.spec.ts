@@ -2,11 +2,12 @@ import { expect, test, type Page } from '@playwright/test';
 import { formatEthLabel } from '../../src/lib/eth';
 import { NFT_PRICE_BOUNDS } from '../../src/mocks/fixtures/nfts';
 import type { Nft } from '../../src/types/nft';
-import { headingOf, openDetail } from './support/actions';
-import { requireNft } from './support/data';
+import { addToCart, headingOf, openCartFromFeedback, openDetail, summaryValue } from './support/actions';
+import { expectedTotal, requireNft } from './support/data';
 import {
   serverChangesNftPrice,
   serverReplaysNftUpdate,
+  waitForCartFetchToSettle,
   waitForRealtimeConnection,
 } from './support/realtime';
 
@@ -93,4 +94,41 @@ test('evento antigo ou duplicado não regride o preço', async ({ page }) => {
   await serverReplaysNftUpdate(page, second);
   await expect(card.getByText(formatEthLabel(second.priceEth), { exact: true })).toBeVisible();
   await expect(card.getByText(formatEthLabel(first.priceEth), { exact: true })).toHaveCount(0);
+});
+
+test('nft.updated atualiza a linha, avisa a mudança e recalcula o resumo', async ({ page }) => {
+  await openDetail(page, NFT_ID);
+  await waitForRealtimeConnection(page);
+
+  // Compra pelo painel (edição padrão, quantidade 1) e vai para o carrinho.
+  await addToCart(page);
+  await openCartFromFeedback(page);
+
+  const items = page.getByRole('region', { name: 'Itens do carrinho' });
+  const row = items.getByRole('listitem').filter({ hasText: title });
+
+  // Estado inicial: resumo com o preço da fixture e SEM aviso de remarcação.
+  await expect(summaryValue(page, 'Subtotal')).toHaveText(formatEthLabel(nft.priceEth));
+  await expect(row.getByText(/Preço atualizado/)).toHaveCount(0);
+
+  // Só com o carrinho QUIETO (nenhuma busca em voo) o evento é honesto: assim a
+  // única forma de a tela mudar é o listener de tempo real atualizar o cache.
+  await waitForCartFetchToSettle(page);
+
+  const event = await serverChangesNftPrice(page, { id: NFT_ID, priceEth: priceA });
+
+  // Sem recarregar: a LINHA passa a avisar o preço novo (é o texto do design,
+  // e só aparece quando o preço atual difere do preço da inclusão)…
+  await expect(
+    row.getByText(`Preço atualizado para ${formatEthLabel(event.priceEth)}.`),
+  ).toBeVisible();
+
+  // …o resumo é recalculado com a MESMA regra do servidor (valor × qtd + taxa)…
+  await expect(summaryValue(page, 'Subtotal')).toHaveText(formatEthLabel(event.priceEth));
+  await expect(summaryValue(page, 'Total')).toHaveText(formatEthLabel(expectedTotal(event.priceEth)));
+
+  // …e leitores de tela são avisados do motivo (região viva sempre montada).
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Preço atualizado em 1 item(ns) do carrinho.' }),
+  ).toBeVisible();
 });

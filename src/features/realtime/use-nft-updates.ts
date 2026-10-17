@@ -1,8 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type { Socket } from 'socket.io-client';
+import { cartKeys } from '@/features/cart/queries';
+import { applyNftPriceToCart } from '@/features/cart/realtime';
 import { catalogKeys } from '@/features/catalog/queries';
 import { createSocket } from '@/lib/socket';
+import type { Cart } from '@/types/cart';
 import type { Nft, NftListResponse } from '@/types/nft';
 import type { NftUpdateEvent } from '@/types/realtime';
 
@@ -15,7 +18,8 @@ import type { NftUpdateEvent } from '@/types/realtime';
  *
  * O trabalho do listener:
  *  1. DESCARTAR eventos duplicados/antigos (o `version` é sempre crescente);
- *  2. aplicar o dado novo nos caches que já existem (sem refetch).
+ *  2. aplicar o dado novo nos caches que já existem — catálogo (lista/detalhe),
+ *     carrosséis e CARRINHO (linha + resumo) — sem refetch.
  *
  * Por que aplicar no cache em vez de "invalidar e buscar de novo"? Porque o
  * evento já traz o dado novo — pedir de novo à API só para exibir o mesmo valor
@@ -46,7 +50,7 @@ function replacePrice(item: unknown, update: NftUpdateEvent): unknown {
   return item;
 }
 
-/** Aplica a mudança no detalhe e nas listagens JÁ em cache. */
+/** Aplica a mudança no detalhe, nas listagens e no carrinho JÁ em cache. */
 function applyNftUpdate(queryClient: QueryClient, update: NftUpdateEvent): void {
   queryClient.setQueryData<Nft | undefined>(catalogKeys.detail(update.id), (previous) =>
     previous ? { ...previous, priceEth: update.priceEth } : previous,
@@ -54,6 +58,12 @@ function applyNftUpdate(queryClient: QueryClient, update: NftUpdateEvent): void 
 
   queryClient.setQueriesData<unknown>({ queryKey: catalogKeys.all }, (previous: unknown) =>
     withUpdatedPrice(previous, update),
+  );
+
+  // Carrinho: se este NFT é uma linha, o preço/total da linha e o resumo mudam —
+  // e a linha passa a avisar "Preço atualizado para …" (ver `cart/realtime.ts`).
+  queryClient.setQueryData<Cart | undefined>(cartKeys.detail(), (previous) =>
+    previous ? applyNftPriceToCart(previous, update) : previous,
   );
 }
 

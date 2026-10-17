@@ -27,9 +27,24 @@ export function CartPage() {
   const related = useQuery(relatedNftsQueryOptions({ limit: 5 }));
 
   const mutationError = updateQuantity.error ?? removeItem.error;
+  /**
+   * Quantas linhas foram "remarcadas" (preço atual ≠ preço da inclusão) — o que
+   * acontece quando `nft.updated` muda o preço de um item que está no carrinho.
+   */
+  const repricedCount =
+    cart.data?.items.filter((item) => item.unitPriceEth !== item.unitPriceWhenAddedEth).length ?? 0;
 
   return (
     <div className="mx-auto max-w-[1200px] space-y-10 px-4 py-8 sm:px-6">
+      {/*
+        Região viva SEMPRE montada: leitores de tela anunciam a mudança de preço
+        (o resumo tem `aria-live` nos valores; aqui vai o MOTIVO da mudança).
+        Nascer junto com o texto faria alguns leitores não anunciarem.
+      */}
+      <p role="status" className="sr-only">
+        {repricedCount > 0 ? `Preço atualizado em ${repricedCount} item(ns) do carrinho.` : ''}
+      </p>
+
       <nav aria-label="Você está aqui">
         <ol className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
           <li>
