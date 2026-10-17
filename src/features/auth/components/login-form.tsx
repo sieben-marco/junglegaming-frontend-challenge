@@ -24,7 +24,6 @@ import { useLogin } from '../queries';
 
 const EMAIL_FIELD_ID = 'login-email';
 const PASSWORD_FIELD_ID = 'login-password';
-const SOCIAL_NOTE_ID = 'login-social-note';
 
 interface LoginFormProps {
   /** Chamado depois de um login bem-sucedido (a página decide para onde ir). */
@@ -143,42 +142,6 @@ export function LoginForm({ onAuthenticated }: LoginFormProps) {
           'Entrar'
         )}
       </Button>
-
-      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-        <span aria-hidden className="h-px flex-1 bg-border" />
-        <span>Ou continue com</span>
-        <span aria-hidden className="h-px flex-1 bg-border" />
-      </div>
-
-      {/*
-        Login social: o Figma mostra Google e Facebook, mas integrar provedores
-        reais está fora do escopo. Os botões ficam DESABILITADOS de propósito —
-        um botão que "não faz nada" aparentando funcionar seria um fluxo falso.
-        TODO(asset): ícones de marca (Google/Facebook) — aguardando o dev.
-      */}
-      <div className="space-y-2">
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full"
-          disabled
-          aria-describedby={SOCIAL_NOTE_ID}
-        >
-          Continuar com Google
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full"
-          disabled
-          aria-describedby={SOCIAL_NOTE_ID}
-        >
-          Continuar com Facebook
-        </Button>
-        <p id={SOCIAL_NOTE_ID} className="sr-only">
-          O login social não está disponível nesta demonstração; use e-mail e senha.
-        </p>
-      </div>
 
       <p className="text-center text-xs text-muted-foreground">
         Demonstração: entre com <span className="text-foreground">ana@kurio.art</span> e a senha{' '}

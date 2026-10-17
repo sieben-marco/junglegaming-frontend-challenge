@@ -75,10 +75,12 @@ Regras: `limite por pedido = min(disponível, maxPerOrder)`; taxa de rede fixa
 sem login respondem **401 `UNAUTHENTICATED`** e a UI encaminha para `/entrar`
 (com `redirect`). Ficam isolados por usuário em `db.favorites[userId]`.
 
-### Sessão e conta (IMPLEMENTADO — login)
+### Sessão e conta (IMPLEMENTADO — login, cadastro e logout)
 | Método | Rota | Observações |
 | --- | --- | --- |
 | POST | `/api/auth/login` | corpo `{ email, password }` ⇒ `{ user, token }`; 401 `INVALID_CREDENTIALS` (mesma resposta para e-mail inexistente e senha errada); 422 `VALIDATION_ERROR`. **Mescla o carrinho do visitante** no do usuário. |
+| POST | `/api/auth/register` | corpo `{ username, email, password }` ⇒ **201** `{ user, token }` (já entra); 422 `VALIDATION_ERROR` com erros **por campo** em `details`; 409 `EMAIL_IN_USE` / `USERNAME_IN_USE` com o campo culpado em `details`. Também mescla o carrinho do visitante. `displayName` = `username` (o Figma só pede "Nome de usuário"). |
+| POST | `/api/auth/logout` | **204, idempotente** (encerra a sessão do token; sair duas vezes não é erro). |
 | GET | `/api/auth/session` | exige `Authorization: Bearer <token>`; ⇒ `{ user }`; 401 `UNAUTHENTICATED` / `SESSION_EXPIRED`. É o que **recupera a sessão após refresh**. |
 
 O token é criado pelo "servidor" (`db.createSession`, TTL de 2 h), guardado pelo
@@ -87,12 +89,11 @@ das rotas privadas vem do cabeçalho (`session.getCurrentUserId(request)`), o qu
 mantém carrinho e favoritos **isolados por usuário**.
 Contas de demonstração (fictícias, senha nunca em claro — só um digest):
 `ana@kurio.art` / `kurio123` e `bruno@kurio.art` / `kurio123`
-(`mocks/fixtures/users.ts`).
+(`mocks/fixtures/users.ts`). Senhas novas entram no "banco" também só como digest.
 
 ### Planejados
-Cadastro de conta (conflito de e-mail), logout, Perfil, Carteiras,
-Cotação de checkout, Pedidos (criação **idempotente**). Requisitos canônicos:
-`challenge-description/README.md` §5.
+Perfil, Carteiras, Cotação de checkout, Pedidos (criação **idempotente**).
+Requisitos canônicos: `challenge-description/README.md` §5.
 
 ## 5. Estado na URL (catálogo)
 
@@ -134,6 +135,14 @@ o snapshot) → `onSettled` (invalidate/revalidação para reconciliar com o
 servidor). O estado previsto do carrinho reusa a MESMA função de totais do
 servidor (`lib/cart-totals.ts`), evitando divergência. Cupom não é otimista
 (quem define percentual é o servidor).
+
+**Logout e cache PRIVADO:** `useLogout().onSettled` usa **`resetQueries`** (não
+`removeQueries`) em `cartKeys.all` + `favoritesKeys.all` e escreve `null` na
+sessão. MOTIVO: `removeQueries` tira a query do cache, mas quem está observando
+continua ligado ao objeto removido e seguiria mostrando o carrinho/favoritos do
+usuário que saiu — vazamento entre contas. `resetQueries` devolve a query ao
+estado inicial (a tela para de exibir o dado na hora) e rebusca como visitante
+(ver AGENTS.md §9).
 
 **Eventos de tempo real** (`features/cart/realtime.ts` via listener do §8) não são
 "otimistas": o dado é autoritativo, então escrevem o valor previsto no cache
@@ -234,13 +243,21 @@ com rótulos e `aria-label` no carrinho; **região viva sempre montada no carrin
 carrinho." quando o tempo real remarca uma linha — o `aria-live` do resumo diz que
 os valores mudaram, esta região diz **por quê**.
 
-**Login:** é um diálogo de verdade (Base UI): foco preso enquanto aberto, `Esc` e
-X para fechar, foco devolvido a quem abriu, `role="dialog"` com nome acessível
-(o título "Entrar" é o `DialogTitle`). Os campos usam `aria-label` (o Figma não
-mostra rótulo), e cada erro de campo aparece em `<p>` ligado por
-`aria-describedby` + `aria-invalid`; o erro do servidor vai numa região
-`role="alert"`. O botão do "olho" é rotulado ("Mostrar/Ocultar senha") e o envio
-com teclado funciona sem rato.
+**Login e cadastro:** são um diálogo de verdade (Base UI): foco preso enquanto
+aberto, `Esc` e X para fechar, foco devolvido a quem abriu, `role="dialog"` com
+nome acessível (o título é o `DialogTitle` — "Entrar" ou "Criar conta", conforme a
+aba). Os campos usam `aria-label` (o Figma não mostra rótulo), e cada erro de
+campo aparece em `<p>` ligado por `aria-describedby` + `aria-invalid`; o erro do
+servidor vai numa região `role="alert"`. O botão do "olho" é rotulado
+("Mostrar/Ocultar senha") e o envio com teclado funciona sem rato. As abas
+"Entrar"/"Criar conta" são **links** entre `/entrar` e `/cadastro` com
+`aria-current="page"` (não `role="tab"`: cada uma leva a outra página, não a um
+painel na mesma tela) e preservam o `?redirect=`.
+
+**Menu do usuário (header):** `DropdownMenu` (Base UI) — abre no clique/Enter,
+navega com as setas, fecha com `Esc` e devolve o foco ao gatilho. Como o NOME fica
+escondido no mobile (`hidden sm:inline`), o nome acessível vem do `aria-label`
+("Menu da conta de …"); o botão "Sair" também avisa o estado pendente.
 
 **Sem controles duplicados:** no mobile a quantidade/compra vivem SÓ na barra
 fixa e o favorito é um coração sobre a imagem (o painel fica `hidden md:block`).
@@ -280,18 +297,28 @@ Antes havia dois grupos `aria-label="Quantidade de …"` na mesma tela.
   reset do banco; os devtools do TanStack podem ser desligados com
   `VITE_DISABLE_DEVTOOLS="true"` (usado nos testes E2E, pois flutuavam sobre a
   barra de compra no mobile).
-- **Login (Figma: modal sobre a Home):** entregamos o modal (diálogo com foco
-  preso, `Esc` e X para sair) sobre o fundo escurecido, mas **sem renderizar a
-  Home por baixo** — a rota `/entrar` é a dona da tela, o que permite abrir o
-  login por link direto e retomar o fluxo com `?redirect=`.
+- **Autenticação (Figma: modal sobre a Home):** entregamos o modal (diálogo com
+  foco preso, `Esc` e X para sair) sobre o fundo escurecido, mas **sem renderizar
+  a Home por baixo** — as rotas `/entrar` e `/cadastro` são donas da tela, o que
+  permite abrir por link direto e retomar o fluxo com `?redirect=`.
+- **Cadastro:** o Figma só pede "Nome de usuário", então é ele que vira
+  `username` **e** `displayName` no "servidor" (não inventamos um campo extra). O
+  cadastro já entra (o Figma não desenha um passo separado de login) e faz o mesmo
+  trabalho do login: cria a sessão e mescla o carrinho do visitante. A aba
+  "Criar conta" é a rota `/cadastro` (o Figma troca a aba sem trocar de URL; aqui
+  cada aba tem URL própria para o link direto funcionar).
+- **Header autenticado:** o Figma não desenha esse estado; seguimos a linguagem do
+  app — "avatar" com as iniciais, nome (escondido no mobile) e um menu com
+  conta + **Sair**. As entradas de Perfil/Carteiras entram quando essas telas
+  existirem (até lá, um link para uma tela inexistente seria fluxo falso).
 - **Login social:** os botões "Continuar com Google/Facebook" existem (o Figma
   os mostra) mas ficam **desabilitados**, com explicação para leitor de tela —
   integrar provedores reais está fora do escopo e um botão que "não faz nada"
   aparentando funcionar seria um fluxo falso. `TODO(asset)`: ícones de marca
   (aguardando o dev). "Esqueceu a senha?" apenas informa que não há recuperação
   nesta demonstração (não simulamos envio de e-mail).
-- **Credenciais de demonstração** aparecem como legenda no formulário
-  (não existem no Figma): sem cadastro/e-mail real, o avaliador precisa saber
+- **Credenciais de demonstração** aparecem como legenda no formulário de login
+  (não existem no Figma): sem e-mail real, o avaliador precisa saber
   com que conta entrar.
 
 ## 11. Testes E2E (Playwright)
@@ -308,14 +335,22 @@ rodando". Como os mocks ligam em DEV, o teste exercita o app como em produção.
 - Cenários de falha (ex.: rollback do otimista) são ligados DENTRO da página via
   `window.__kurioMocks` — a UI não tem "caminho alternativo", quem falha é o
   "servidor".
-- **27 fluxos** cobrindo catálogo, detalhe, carrinho, sessão, tempo real e mobile.
-- **Sessão:** login (retorno ao fluxo anterior, validação no cliente sem ida à
-  rede, credenciais inválidas), **recuperação da sessão pelo token após refresh**
+- **32 fluxos** cobrindo catálogo, detalhe, carrinho, sessão/conta, tempo real e
+  mobile.
+- **Sessão/conta:** login (retorno ao fluxo anterior, validação no cliente sem ida
+  à rede, credenciais inválidas), **recuperação da sessão pelo token após refresh**
   (o teste exige o 200 de `GET /api/auth/session` numa navegação do zero),
   favorito **salvo de verdade + preservado após refresh**, carrinho do visitante
   mesclado ao entrar e **expiração durante a navegação** (o "servidor" vence a
-  sessão no meio do fluxo e o app pede login de novo, retomando o contexto). Com
-  a mesclagem desligada no "servidor", o fluxo do carrinho FALHA (conferido).
+  sessão no meio do fluxo e o app pede login de novo, retomando o contexto).
+  **Cadastro:** cria a conta e volta ao fluxo anterior já autenticado; **conflito
+  de e-mail** exige a mensagem do 409 E o campo destacado (e o `Esc` fecha o modal
+  antes de conferir o header, que fica `aria-hidden` com o diálogo aberto);
+  confirmação de senha diferente barra o envio com **zero** requisições.
+  **Logout:** limpa o cache privado — o item do carrinho do usuário não pode
+  continuar na tela e favoritar volta a cair no login (prova de que a sessão
+  acabou também no "servidor"). Com `removeQueries` no lugar de `resetQueries`, o
+  fluxo FALHA (conferido). Com a mesclagem desligada, o fluxo do carrinho FALHA.
 - **Tempo real sem janela de dúvida:** o fluxo de reconciliação derruba as
   conexões E muda o preço na MESMA ida ao "servidor"
   (`serverDropsConnectionsAndChangesPrice`) — assim não existe o instante em que

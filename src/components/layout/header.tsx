@@ -1,6 +1,8 @@
 import { Link } from '@tanstack/react-router';
 import { LogIn, Menu, Search, ShoppingCart } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { UserMenu } from '@/features/auth/components/user-menu';
+import { useCurrentUser } from '@/features/auth/queries';
 import { useCartCount } from '@/features/cart/queries';
 import { cn } from '@/lib/utils';
 
@@ -13,6 +15,9 @@ const NAV_ITEMS = [
 
 export function Header() {
   const cartCount = useCartCount();
+  // Quem está logado vem da SESSÃO (token + `GET /api/auth/session`), nunca de um
+  // "estado paralelo" no header.
+  const user = useCurrentUser();
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/90 backdrop-blur">
@@ -57,11 +62,15 @@ export function Header() {
               </span>
             ) : null}
           </Link>
-          <Link to="/entrar" className={cn(buttonVariants(), 'ml-1 gap-2')}>
-            <LogIn />
-            <span className="hidden sm:inline">Entrar</span>
-            <span className="sr-only sm:hidden">Entrar</span>
-          </Link>
+          {user ? (
+            <UserMenu user={user} />
+          ) : (
+            <Link to="/entrar" className={cn(buttonVariants(), 'ml-1 gap-2')}>
+              <LogIn />
+              <span className="hidden sm:inline">Entrar</span>
+              <span className="sr-only sm:hidden">Entrar</span>
+            </Link>
+          )}
           <Button variant="ghost" size="icon" aria-label="Abrir menu" className="md:hidden">
             <Menu />
           </Button>

@@ -1,7 +1,7 @@
 import { http } from '@/lib/http';
 import { clearAuthToken, getAuthToken, setAuthToken } from '@/lib/auth-token';
 import { getApiError } from '@/lib/api-error';
-import type { LoginInput, LoginResponse, SessionResponse, User } from '@/types/auth';
+import type { LoginInput, LoginResponse, RegisterInput, SessionResponse, User } from '@/types/auth';
 
 /**
  * Acesso à API de conta/sessão.
@@ -16,6 +16,34 @@ export async function login(input: LoginInput): Promise<User> {
   const { data } = await http.post<LoginResponse>('/auth/login', input);
   setAuthToken(data.token);
   return data.user;
+}
+
+/**
+ * Cadastro de conta.
+ *
+ * O "servidor" já devolve o TOKEN junto (a pessoa entra ao criar a conta, sem
+ * uma segunda ida ao login) — e faz o mesmo trabalho do login: cria a sessão e
+ * mescla o carrinho do visitante.
+ */
+export async function register(input: RegisterInput): Promise<User> {
+  const { data } = await http.post<LoginResponse>('/auth/register', input);
+  setAuthToken(data.token);
+  return data.user;
+}
+
+/**
+ * Logout: avisa o servidor (encerra a sessão) e descarta o token local.
+ *
+ * Se a chamada falhar (rede caiu no meio), ainda assim esquecemos o token: do
+ * ponto de vista do usuário, "sair" precisa sair — e a sessão no servidor tem
+ * prazo de validade de qualquer forma.
+ */
+export async function logout(): Promise<void> {
+  try {
+    await http.post('/auth/logout');
+  } finally {
+    clearAuthToken();
+  }
 }
 
 /**

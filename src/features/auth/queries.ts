@@ -1,10 +1,16 @@
 import { getAuthToken, subscribeToAuthToken } from '@/lib/auth-token';
 import { cartKeys } from '@/features/cart/queries';
 import { favoritesKeys } from '@/features/favorites/queries';
-import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  queryOptions,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from '@tanstack/react-query';
 import { useEffect, useRef, useSyncExternalStore } from 'react';
-import type { User } from '@/types/auth';
-import { fetchSession, login } from './api';
+import type { RegisterInput, User } from '@/types/auth';
+import { fetchSession, login, logout, register } from './api';
 
 /**
  * Sessão do usuário via TanStack Query.
@@ -89,22 +95,69 @@ export function useSessionBootstrap(): User | null {
 }
 
 /**
- * Login.
+ * Entrar (login/cadastro) deu certo: guarda quem entrou e revalida o que depende
+ * de QUEM está logado.
  *
- * Em caso de sucesso, o estado da sessão é escrito na hora (`setQueryData`) e as
- * áreas que dependem de QUEM está logado são rebuscadas: o "servidor" acabou de
- * MESCLAR o carrinho do visitante no do usuário e os favoritos agora existem de
- * verdade.
+ * O "servidor" acabou de:
+ *  - MESCLAR o carrinho do visitante no do usuário (as linhas mudam de dono);
+ *  - dar acesso aos favoritos, que agora existem de verdade.
+ * Por isso as duas chaves são invalidadas: os dados em cache eram do VISITANTE.
+ */
+function applyAuthenticatedUser(queryClient: QueryClient, user: User): void {
+  queryClient.setQueryData<User | null>(authKeys.session(), user);
+  void queryClient.invalidateQueries({ queryKey: cartKeys.all });
+  void queryClient.invalidateQueries({ queryKey: favoritesKeys.all });
+}
+
+/**
+ * Login.
  */
 export function useLogin() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: login,
-    onSuccess: (user) => {
-      queryClient.setQueryData<User | null>(authKeys.session(), user);
-      void queryClient.invalidateQueries({ queryKey: cartKeys.all });
-      void queryClient.invalidateQueries({ queryKey: favoritesKeys.all });
+    onSuccess: (user) => applyAuthenticatedUser(queryClient, user),
+  });
+}
+
+/**
+ * Cadastro (a pessoa já entra ao criar a conta).
+ */
+export function useRegister() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: RegisterInput) => register(input),
+    onSuccess: (user) => applyAuthenticatedUser(queryClient, user),
+  });
+}
+
+/**
+ * Logout.
+ *
+ * Limpar o cache PRIVADO é parte do trabalho: carrinho e favoritos eram do
+ * usuário que saiu. Se ficassem no cache, o próximo visitante (ou outro usuário,
+ * no mesmo navegador) veria dados que não são dele — vazamento de dados entre
+ * contas.
+ *
+ * Por que `resetQueries` e não `removeQueries`: remover uma query ATIVA tira ela
+ * do cache, mas os componentes que a observam continuam ligados ao objeto antigo
+ * e seguiriam mostrando o dado do usuário que saiu (`removeQueries` é para
+ * descartar cache SEM tela usando; ver AGENTS.md §9). `resetQueries` devolve a
+ * query ao estado inicial (sem dado) e rebusca as ativas — a tela mostra o
+ * carrinho do VISITANTE (vazio) sem nunca exibir o do usuário anterior.
+ */
+export function useLogout() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: logout,
+    onSettled: () => {
+      void queryClient.resetQueries({ queryKey: cartKeys.all });
+      void queryClient.resetQueries({ queryKey: favoritesKeys.all });
+      queryClient.setQueryData<User | null>(authKeys.session(), null);
+      // O catálogo é público: não se mexe nele aqui.
     },
   });
 }

@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { requireNft } from './support/data';
 import { headingOf, openDetail, successFeedback, visibleStepper } from './support/actions';
-import { submitLogin } from './support/auth';
+import { logout, submitLogin, userMenuButton } from './support/auth';
 
 /**
  * Fluxos MOBILE (rodam no projeto `mobile-chromium`, viewport de celular).
@@ -43,4 +43,18 @@ test('entrar pelo login no mobile salva o favorito (sem voltar ao login)', async
   await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
   await page.getByRole('button', { name: 'Adicionar aos favoritos' }).click();
   await expect(page.getByRole('button', { name: 'Remover dos favoritos' })).toBeVisible();
+});
+
+test('o menu da conta no mobile mostra quem entrou e sai', async ({ page }) => {
+  await page.goto('/entrar?redirect=/mercado');
+  await submitLogin(page);
+
+  // No celular o header esconde o NOME (o espaço é curto), mas o menu continua
+  // identificável — é o `aria-label` que dá o nome acessível ao botão.
+  await expect(userMenuButton(page)).toBeVisible();
+
+  await logout(page);
+
+  // Sem sessão, o header volta a oferecer "Entrar" e o favorito cai no login.
+  await expect(page.getByRole('banner').getByRole('link', { name: 'Entrar' })).toBeVisible();
 });

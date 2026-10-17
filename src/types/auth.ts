@@ -29,6 +29,19 @@ export interface LoginInput {
 }
 
 /**
+ * Corpo de `POST /api/auth/register`.
+ *
+ * O Figma pede só o "Nome de usuário" (não um nome de exibição separado), então
+ * é ele que vira `username` — e o "servidor" usa o mesmo texto como
+ * `displayName` (ver `handlers/auth.ts`).
+ */
+export interface RegisterInput {
+  username: string;
+  email: string;
+  password: string;
+}
+
+/**
  * Resposta do login: o usuário + o TOKEN da sessão.
  *
  * O token é o que o cliente guarda e reenvia em `Authorization: Bearer <token>`

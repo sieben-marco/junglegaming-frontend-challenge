@@ -181,6 +181,26 @@ export function findUserById(userId: string): UserRecord | undefined {
   return state.users.find((user) => user.id === userId);
 }
 
+/** Busca por nome de usuário (case-insensitive — `AnaSouza` = `anasouza`). */
+export function findUserByUsername(username: string): UserRecord | undefined {
+  const normalized = username.trim().toLowerCase();
+  return state.users.find((user) => user.username.trim().toLowerCase() === normalized);
+}
+
+/**
+ * Próximo id de conta (`user-003`, `user-004`…).
+ *
+ * Deriva do MAIOR id existente em vez de contar contas: se um dia uma conta for
+ * removida, o id novo não colide com um antigo.
+ */
+export function nextUserId(): string {
+  const highest = state.users.reduce((max, user) => {
+    const suffix = Number(user.id.replace(/^\D+/, ''));
+    return Number.isFinite(suffix) ? Math.max(max, suffix) : max;
+  }, 0);
+  return `user-${String(highest + 1).padStart(3, '0')}`;
+}
+
 /** Cadastra uma conta nova (usado pelo cadastro — o id já vem pronto). */
 export function addUser(user: UserRecord): void {
   mutateDb((draft) => {
