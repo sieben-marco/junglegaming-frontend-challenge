@@ -23,8 +23,12 @@ function RootLayout() {
       <NewsletterBand />
       <SiteFooter />
 
-      {/* Devtools só aparecem em desenvolvimento. */}
-      {import.meta.env.DEV ? (
+      {/*
+        Devtools só em desenvolvimento — e desligáveis por env para os testes E2E,
+        porque o botão flutuante fica sobre a barra fixa de compra no mobile e
+        atrapalharia cliques reais (nada de `force: true` para contornar).
+      */}
+      {import.meta.env.DEV && import.meta.env.VITE_DISABLE_DEVTOOLS !== 'true' ? (
         <>
           <ReactQueryDevtools buttonPosition="bottom-left" />
           <TanStackRouterDevtools position="bottom-right" />

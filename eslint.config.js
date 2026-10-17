@@ -8,7 +8,14 @@ import tseslint from 'typescript-eslint';
 
 export default defineConfig([
   // `src/routeTree.gen.ts` é gerado pelo TanStack Router — não deve ser lintado.
-  globalIgnores(['dist', 'src/routeTree.gen.ts', 'public/mockServiceWorker.js']),
+  // `playwright-report`/`test-results` são artefatos dos testes E2E.
+  globalIgnores([
+    'dist',
+    'src/routeTree.gen.ts',
+    'public/mockServiceWorker.js',
+    'playwright-report',
+    'test-results',
+  ]),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -20,6 +27,14 @@ export default defineConfig([
     ],
     languageOptions: {
       globals: globals.browser,
+    },
+  },
+  {
+    // Testes E2E e config do Playwright rodam no Node (e mexem no `window` da
+    // página via `page.evaluate`), então precisam dos dois conjuntos de globais.
+    files: ['playwright.config.ts', 'tests/**/*.ts'],
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node },
     },
   },
   {
