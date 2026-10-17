@@ -13,6 +13,11 @@ export async function enableMocking(): Promise<void> {
   const isEnabled = import.meta.env.DEV || import.meta.env.VITE_ENABLE_MOCKS === 'true';
   if (!isEnabled) return;
 
+  // Em DEV, deixa os interruptores de cenário acessíveis pelo console
+  // (`window.__kurioMocks`) — sem custo no bundle de produção.
+  const { exposeMockDevTools } = await import('./dev-tools');
+  exposeMockDevTools();
+
   const { worker } = await import('./browser');
   await worker.start({
     // Não reclamar de requisições que não têm handler (ex.: assets, HMR).
