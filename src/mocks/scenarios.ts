@@ -16,6 +16,12 @@ export interface MockScenarioConfig {
   catalogFailure: boolean;
   /** Faz `GET /api/nfts` responder uma lista vazia (estado vazio). */
   catalogEmpty: boolean;
+  /** Latência simulada (ms) das respostas do carrinho. */
+  cartLatencyMs: number;
+  /** Faz as MUTATIONS do carrinho falharem (exercita o rollback otimista). */
+  cartMutationFailure: boolean;
+  /** Faz qualquer chamada REST falhar como falha de REDE (sem resposta). */
+  networkError: boolean;
 }
 
 /** Cenário padrão (conhecido e determinístico). */
@@ -23,6 +29,9 @@ export const DEFAULT_MOCK_SCENARIOS: MockScenarioConfig = {
   catalogLatencyMs: 400,
   catalogFailure: false,
   catalogEmpty: false,
+  cartLatencyMs: 300,
+  cartMutationFailure: false,
+  networkError: false,
 };
 
 export const mockScenarios: MockScenarioConfig = { ...DEFAULT_MOCK_SCENARIOS };

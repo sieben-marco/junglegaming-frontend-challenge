@@ -1,8 +1,8 @@
 import { delay, http, HttpResponse } from 'msw';
-import type { ApiErrorBody } from '@/types/api';
-import type { Nft, NftFacets, NftListResponse } from '@/types/nft';
-import { COLLECTIONS, NETWORKS, NFTS, NFT_PAGE_SIZE, NFT_PRICE_BOUNDS } from '../fixtures/nfts';
+import type { Nft, NftFacets, NftListResponse, NftReviewsResponse } from '@/types/nft';
+import { COLLECTIONS, NETWORKS, NFTS, NFT_PAGE_SIZE, NFT_PRICE_BOUNDS, findReviewsByNft } from '../fixtures/nfts';
 import { mockScenarios } from '../scenarios';
+import { apiError, networkError } from './http-utils';
 
 /**
  * Handlers REST do catálogo de NFTs.
@@ -12,10 +12,6 @@ import { mockScenarios } from '../scenarios';
  * tipadas (`NftListResponse`). Facetas e faixa de preço são derivadas das
  * fixtures, garantindo consistência entre filtros e contagens.
  */
-
-function apiError(status: number, code: string, message: string): ApiErrorBody {
-  return { status, code, message };
-}
 
 function parseNumber(value: string | null): number | undefined {
   if (value === null || value.trim() === '') return undefined;
@@ -66,10 +62,10 @@ export const catalogHandlers = [
   http.get('/api/nfts', async ({ request }) => {
     await delay(mockScenarios.catalogLatencyMs);
 
+    if (mockScenarios.networkError) return networkError();
+
     if (mockScenarios.catalogFailure) {
-      return HttpResponse.json(apiError(500, 'CATALOG_UNAVAILABLE', 'Não foi possível carregar o catálogo.'), {
-        status: 500,
-      });
+      return apiError(500, 'CATALOG_UNAVAILABLE', 'Não foi possível carregar o catálogo.');
     }
 
     const url = new URL(request.url);
@@ -121,11 +117,33 @@ export const catalogHandlers = [
   http.get('/api/nfts/:id', async ({ params }) => {
     await delay(mockScenarios.catalogLatencyMs);
 
+    if (mockScenarios.networkError) return networkError();
+
     const nft = NFTS.find((item) => item.id === params.id);
     if (!nft) {
-      return HttpResponse.json(apiError(404, 'NFT_NOT_FOUND', 'NFT não encontrado.'), { status: 404 });
+      return apiError(404, 'NFT_NOT_FOUND', 'NFT não encontrado.');
     }
 
     return HttpResponse.json(nft satisfies Nft);
+  }),
+
+  // Avaliações de colecionadores (aba do detalhe).
+  http.get('/api/nfts/:id/reviews', async ({ params }) => {
+    await delay(mockScenarios.catalogLatencyMs);
+
+    if (mockScenarios.networkError) return networkError();
+
+    const nft = NFTS.find((item) => item.id === params.id);
+    if (!nft) {
+      return apiError(404, 'NFT_NOT_FOUND', 'NFT não encontrado.');
+    }
+
+    const body: NftReviewsResponse = {
+      items: findReviewsByNft(nft.id),
+      average: nft.rating.average,
+      count: nft.rating.count,
+    };
+
+    return HttpResponse.json(body);
   }),
 ];

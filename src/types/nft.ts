@@ -36,6 +36,49 @@ export type NftSort = (typeof NFT_SORTS)[number];
 /** Selo de raridade exibido sobre a arte. */
 export type NftRarity = 'raro' | 'epico' | 'lendario';
 
+/**
+ * Edições (séries) em que um NFT é vendido. A "ABERTA" não tem tiragem fixa.
+ * A FONTE ÚNICA dos ids é esta lista `as const`: dela saem o tipo TS e o enum
+ * usado para validar o payload na API.
+ */
+export const NFT_EDITION_IDS = ['1-1', '1-10', '1-50', 'open'] as const;
+
+export type NftEditionId = (typeof NFT_EDITION_IDS)[number];
+
+/** Uma edição disponível para compra. */
+export interface NftEdition {
+  id: NftEditionId;
+  /** Rótulo como aparece no design (ex.: "1/1", "ABERTA"). */
+  label: string;
+  /** Unidades disponíveis nesta edição (0 = esgotada). */
+  available: number;
+  /** Teto de unidades por pedido (o "limite de quantidade"). */
+  maxPerOrder: number;
+}
+
+/** Nota do NFT (média de 0 a 5 + número de avaliações). */
+export interface NftRating {
+  average: number;
+  count: number;
+}
+
+/** Uma avaliação de colecionador (aba "Avaliações de colecionadores"). */
+export interface NftReview {
+  id: string;
+  author: string;
+  /** Nota de 1 a 5 (inteira). */
+  rating: number;
+  comment: string;
+  createdAt: string;
+}
+
+/** Resposta de `GET /api/nfts/:id/reviews`. */
+export interface NftReviewsResponse {
+  items: NftReview[];
+  average: number;
+  count: number;
+}
+
 /** Um NFT como trafega na API. */
 export interface Nft {
   id: string;
@@ -43,6 +86,8 @@ export interface Nft {
   name: string;
   /** Número da edição (ex.: "042"). */
   number: string;
+  /** Identificador on-chain (ex.: "0042" — a UI exibe "#0042"). */
+  tokenId: string;
   collectionId: NftCollectionId;
   collectionName: string;
   networkId: NetworkId;
@@ -52,8 +97,21 @@ export interface Nft {
   /** Preço antigo, quando há promoção (exibido riscado). */
   previousPriceEth?: string;
   rarity?: NftRarity;
-  /** Unidades disponíveis (0 = esgotado). */
+  /** Unidades disponíveis somando todas as edições (0 = esgotado). */
   available: number;
+  /** Edições em que este NFT é vendido (pelo menos uma). */
+  editions: NftEdition[];
+  rating: NftRating;
+  /** Descrição curta exibida no painel e na aba de detalhes. */
+  description: string;
+  /** Atributos exibidos na linha "Atributos". */
+  attributes: string[];
+  /** Endereço do contrato (ERC-721) exibido nos metadados. */
+  contractAddress: string;
+  /** Direitos autorais do criador (%) nas vendas secundárias. */
+  royaltiesPercent: number;
+  /** Indica que a obra tem "arte desbloqueável" para colecionadores. */
+  hasUnlockedContent: boolean;
   /** ISO 8601 — usado para ordenar por "listados recentemente". */
   createdAt: string;
   isNew: boolean;

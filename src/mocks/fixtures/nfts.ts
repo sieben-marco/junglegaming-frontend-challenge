@@ -1,12 +1,14 @@
-import type { Nft, NftCollectionId, NetworkId } from '@/types/nft';
+import type { Nft, NftCollectionId, NftEdition, NftEditionId, NftReview, NetworkId } from '@/types/nft';
 
 /**
  * Fixtures do catálogo de NFTs.
  *
  * Geradas de forma DETERMINÍSTICA (mesma saída em toda execução) a partir de um
  * RNG com semente fixa. Assim os testes ficam estáveis e o reset restaura um
- * cenário conhecido. As artes (imageUrl) ainda não existem: a UI usa um
- * placeholder até o dev fornecer os assets (ver AGENTS.md > regra 9).
+ * cenário conhecido.
+ *
+ * As artes são as 4 fornecidas pelo dev em `public/nfts` (reutilizadas
+ * ciclicamente). Quando ele enviar uma arte por NFT, basta ampliar NFT_ARTWORKS.
  */
 
 interface CollectionMeta {
@@ -59,6 +61,51 @@ export const NFT_ARTWORKS = [
   '/nfts/nft-artwork-05.png',
   '/nfts/nft-artwork-11.png',
 ] as const;
+
+/**
+ * Edições possíveis e o TETO de unidades por pedido de cada uma. O teto é o
+ * "limite de quantidade" do enunciado; o disponível é sorteado por NFT.
+ */
+const EDITION_META: { id: NftEditionId; label: string; cap: number }[] = [
+  { id: '1-1', label: '1/1', cap: 1 },
+  { id: '1-10', label: '1/10', cap: 10 },
+  { id: '1-50', label: '1/50', cap: 50 },
+  { id: 'open', label: 'ABERTA', cap: 10 },
+];
+
+const ATTRIBUTE_POOLS = [
+  ['Óculos', 'Capuz', 'Headphones', 'Colar', 'Coroa', 'Máscara', 'Brincos'],
+  ['Esmeralda', 'Âmbar', 'Coral', 'Ametista', 'Onyx', 'Rubi', 'Safira'],
+  ['Raro', 'Épico', 'Lendário', 'Comum', 'Incomum'],
+];
+
+const REVIEW_AUTHORS = [
+  'Ana Prado',
+  'Bruno Salles',
+  'Carla Nunes',
+  'Diego Matos',
+  'Elisa Ramos',
+  'Felipe Andrade',
+  'Gabi Rocha',
+  'Heitor Lima',
+  'Inês Moreira',
+  'João Vitor',
+  'Karen Dias',
+  'Lucas Pires',
+];
+
+const REVIEW_COMMENTS = [
+  'Arte impecável e o processo de compra foi rápido.',
+  'Coleção com curadoria muito boa, recomendo!',
+  'Chegou certinho, procedência on-chain confere.',
+  'Ótimo acabamento e cores vivas na tela.',
+  'Valeu cada wei, o artista manda muito bem.',
+  'Entrega instantânea e suporte atencioso.',
+  'A peça ficou ainda melhor pessoalmente.',
+  'Item raro com história interessante por trás.',
+  'Boa experiência, voltarei para comprar mais.',
+  'Metadados bem organizados e fáceis de verificar.',
+];
 
 /** RNG determinístico (mulberry32). Mesma semente ⇒ mesma sequência. */
 function mulberry32(seed: number): () => number {
@@ -127,11 +174,58 @@ const NAME_POOL = [
 ];
 
 const BASE_TIME = Date.UTC(2026, 8, 30, 12, 0, 0); // 2026-09-30T12:00:00Z
+const DAY_MS = 86_400_000;
 
-function buildNfts(): Nft[] {
+/** Escolhe um item determinístico de uma lista. */
+function pick<TItem>(rand: () => number, items: TItem[]): TItem {
+  return items[Math.floor(rand() * items.length)] as TItem;
+}
+
+/** Constrói as edições de um NFT (a "ABERTA" é sempre oferecida). */
+function buildEditions(rand: () => number, soldOut: boolean): NftEdition[] {
+  const editions: NftEdition[] = [];
+
+  for (const meta of EDITION_META) {
+    // Nem toda edição existe para todo NFT (sorteamos quais são oferecidas).
+    if (meta.id !== 'open' && rand() < 0.3) continue;
+
+    const available = soldOut ? 0 : Math.min(meta.cap, 1 + Math.floor(rand() * meta.cap));
+    editions.push({ id: meta.id, label: meta.label, available, maxPerOrder: meta.cap });
+  }
+
+  if (editions.length === 0) {
+    editions.push({ id: 'open', label: 'ABERTA', available: soldOut ? 0 : 5, maxPerOrder: 10 });
+  }
+  return editions;
+}
+
+/** Gera as avaliações de um NFT (a média sai delas — nada de número solto). */
+function buildReviews(rand: () => number, nftId: string): NftReview[] {
+  const count = 3 + Math.floor(rand() * 10);
+
+  return Array.from({ length: count }, (_, k) => ({
+    id: `${nftId}-rev-${k + 1}`,
+    author: pick(rand, REVIEW_AUTHORS),
+    rating: 3 + Math.floor(rand() * 3), // 3 a 5
+    comment: pick(rand, REVIEW_COMMENTS),
+    createdAt: new Date(BASE_TIME - (k + 1) * DAY_MS).toISOString(),
+  }));
+}
+
+/** Endereço de contrato pseudo-aleatório, porém determinístico (40 hex). */
+function pseudoAddress(seed: number): string {
+  const hex = (n: number) => (n >>> 0).toString(16).padStart(8, '0');
+  const parts = [0, 1, 2, 3, 4].map((k) => hex(Math.imul(seed + k * 7 + 1, 2654435761)));
+  return `0x${parts.join('')}`;
+}
+
+function buildCatalog(): { nfts: Nft[]; reviewsByNft: Record<string, NftReview[]> } {
   const rand = mulberry32(20261016);
+  const nfts: Nft[] = [];
+  const reviewsByNft: Record<string, NftReview[]> = {};
 
-  return Array.from({ length: NFT_COUNT }, (_, i) => {
+  for (let i = 0; i < NFT_COUNT; i += 1) {
+    const id = `nft-${String(i + 1).padStart(3, '0')}`;
     const collection = pickWeighted(COLLECTIONS, i, NFT_COUNT, 3);
     const network = pickWeighted(NETWORKS, i, NFT_COUNT, 11);
 
@@ -142,12 +236,25 @@ function buildNfts(): Nft[] {
     const rarity =
       rarityRoll < 0.06 ? 'lendario' : rarityRoll < 0.18 ? 'epico' : rarityRoll < 0.45 ? 'raro' : undefined;
 
-    const available = rand() < 0.08 ? 0 : 1 + Math.floor(rand() * 8);
+    const soldOut = rand() < 0.08;
+    const editions = buildEditions(rand, soldOut);
+    const available = editions.reduce((sum, edition) => sum + edition.available, 0);
 
-    return {
-      id: `nft-${String(i + 1).padStart(3, '0')}`,
+    const hasUnlockedContent = rand() < 0.5;
+    const description =
+      `Um colecionável digital finalizado à mão da coleção ${collection.name}, ` +
+      `verificado na ${network.name}` +
+      (hasUnlockedContent ? ', com arte desbloqueável e acesso para colecionadores.' : '.');
+
+    const reviews = buildReviews(rand, id);
+    reviewsByNft[id] = reviews;
+    const average = reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length;
+
+    nfts.push({
+      id,
       name: NAME_POOL[i] as string,
       number: String(Math.floor(rand() * 900) + 10).padStart(3, '0'),
+      tokenId: String(Math.floor(rand() * 9000) + 1000),
       collectionId: collection.id,
       collectionName: collection.name,
       networkId: network.id,
@@ -156,18 +263,37 @@ function buildNfts(): Nft[] {
       previousPriceEth: hasDiscount ? (price + 0.3 + rand() * 1.4).toFixed(2) : undefined,
       rarity,
       available,
+      editions,
+      rating: { average: Number(average.toFixed(1)), count: reviews.length },
+      description,
+      attributes: ATTRIBUTE_POOLS.map((pool) => pick(rand, pool)),
+      contractAddress: pseudoAddress(i + 1),
+      royaltiesPercent: pick(rand, [2.5, 5, 7.5, 10]),
+      hasUnlockedContent,
       createdAt: new Date(BASE_TIME - i * 8 * 3_600_000).toISOString(),
       isNew: i < 12,
       trending: rand() > 0.6,
       featured: i % 12 === 0,
       imageUrl: NFT_ARTWORKS[i % NFT_ARTWORKS.length],
-    } satisfies Nft;
-  });
+    });
+  }
+
+  return { nfts, reviewsByNft };
 }
 
-export const NFTS: Nft[] = buildNfts();
+const catalog = buildCatalog();
+
+export const NFTS: Nft[] = catalog.nfts;
+
+/** Avaliações por NFT (aba "Avaliações de colecionadores"). */
+export const REVIEWS_BY_NFT: Record<string, NftReview[]> = catalog.reviewsByNft;
 
 /** Busca um NFT pelo id (ou `undefined`). */
 export function findNftById(id: string): Nft | undefined {
   return NFTS.find((nft) => nft.id === id);
+}
+
+/** Busca as avaliações de um NFT (lista vazia se não houver). */
+export function findReviewsByNft(id: string): NftReview[] {
+  return REVIEWS_BY_NFT[id] ?? [];
 }
