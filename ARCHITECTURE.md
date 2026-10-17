@@ -141,9 +141,9 @@ servidor (`lib/cart-totals.ts`), evitando divergência. Cupom não é otimista
 
 ## 8. Tempo real (Socket.IO)
 
-**Implementado: `nft.updated` (preço) — catálogo, detalhe e CARRINHO.** Pendente:
-reconciliação com REST na reconexão; `order.updated` (depende do checkout); mudança
-de disponibilidade (junto do cenário de estoque).
+**Implementado: `nft.updated` (preço) — catálogo, detalhe e CARRINHO — e a
+RECONCILIAÇÃO com o REST quando a conexão volta.** Pendente: `order.updated`
+(depende do checkout); mudança de disponibilidade (junto do cenário de estoque).
 
 - **Contrato** (`types/realtime.ts`): `{ resource: 'nft', id, version, priceEth,
   updatedAt }` — identidade estável, recurso afetado e **versão monotônica por
@@ -167,10 +167,16 @@ de disponibilidade (junto do cenário de estoque).
   fórmula paralela. Devolve o MESMO objeto quando nada mudou (sem re-render
   inútil). `unitPriceWhenAddedEth` é preservado de propósito: é a divergência
   entre ele e o preço atual que faz a linha avisar "Preço atualizado para …".
+- **Reconciliação** (`reconcileWithServer` no mesmo arquivo): `connect` dispara na
+  primeira conexão e em cada reconexão; só da SEGUNDA em diante o app invalida
+  `catalogKeys.all` + `cartKeys.all`. MOTIVO: durante a queda o "servidor" seguiu
+  mudando e esses eventos se perderam — a API é quem reconta a história. Aqui
+  `invalidateQueries` (e não `setQueryData`) é o certo: não sabemos O QUE mudou.
 - **Gatilhos em DEV** (`mocks/dev-tools.ts` → `window.__kurioMocks`):
   `changeNftPrice` (ação do servidor), `emitNftUpdate` (reentrega um evento, para
-  duplicata/fora de ordem) e `connectedClientCount` (o teste espera o socket
-  conectar sem `waitForTimeout`).
+  duplicata/fora de ordem), `connectedClientCount` (o teste espera o socket
+  conectar sem `waitForTimeout`) e `disconnectClients` (**derruba** as conexões,
+  para o cenário de queda/reconexão).
 - **Detalhes do MSW que exigiram cuidado** (ver AGENTS.md §9): (1) ao casar a
   URL, o MSW remove a query e normaliza o caminho `/socket.io/` para `/`, logo o
   padrão do `ws.link` é `'/'` (e o handler dá passthrough em quem não é
@@ -253,7 +259,12 @@ rodando". Como os mocks ligam em DEV, o teste exercita o app como em produção.
 - Cenários de falha (ex.: rollback do otimista) são ligados DENTRO da página via
   `window.__kurioMocks` — a UI não tem "caminho alternativo", quem falha é o
   "servidor".
-- **19 fluxos** cobrindo catálogo, detalhe, carrinho, tempo real e mobile.
+- **20 fluxos** cobrindo catálogo, detalhe, carrinho, tempo real e mobile.
+- **Tempo real sem janela de dúvida:** o fluxo de reconciliação derruba as
+  conexões E muda o preço na MESMA ida ao "servidor"
+  (`serverDropsConnectionsAndChangesPrice`) — assim não existe o instante em que
+  o app está conectado e recebe o evento; o preço novo só pode ter vindo do REST.
+  Com a reconciliação desligada, o fluxo FALHA (conferido).
 - **Teste que "morde":** antes de disparar um evento de tempo real, o fluxo espera
   o carrinho "sossegar" (`waitForCartFetchToSettle`, nenhum `GET /api/cart` em
   voo). Sem isso, a resposta de uma busca disparada pelo "adicionar" chegava

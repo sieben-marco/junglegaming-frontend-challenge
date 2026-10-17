@@ -42,6 +42,8 @@ interface RealtimeClient {
   /** A conexão ainda está aberta? (o WebSocket guarda `readyState`). */
   isOpen: () => boolean;
   emit: (event: string, ...data: unknown[]) => void;
+  /** Fecha a conexão (usado para simular QUEDA no cenário de reconciliação). */
+  close: () => void;
 }
 
 /** Conexões do app (o "servidor" usa esta lista para transmitir). */
@@ -78,6 +80,7 @@ export const realtimeHandlers = [
           clients.delete(client);
         }
       },
+      close: () => connection.client.close(),
     };
 
     clients.add(client);
@@ -133,4 +136,21 @@ export function changeNftPrice(input: { id: string; priceEth: string }): NftUpda
 /** Reenvia um evento JÁ GERADO (usado para testar duplicata/evento antigo). */
 export function emitNftUpdate(event: NftUpdateEvent): void {
   broadcast('nft.updated', event);
+}
+
+/**
+ * Derruba TODAS as conexões abertas — simula QUEDA de rede do lado do servidor.
+ *
+ * Serve para exercitar a RECONCILIAÇÃO: com o app fora do ar, o servidor pode
+ * mudar (e emitir) o que quiser, porque ninguém está escutando. Quando o socket
+ * reconecta, o REST precisa contar a história que o cliente perdeu.
+ *
+ * Devolve quantas conexões foram fechadas (útil para o teste confirmar que havia
+ * alguém conectado antes de derrubar).
+ */
+export function disconnectClients(): number {
+  const closed = [...clients];
+  for (const client of closed) client.close();
+  clients.clear();
+  return closed.length;
 }

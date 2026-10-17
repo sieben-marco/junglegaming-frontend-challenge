@@ -6,6 +6,7 @@ import { addToCart, headingOf, openCartFromFeedback, openDetail, summaryValue } 
 import { expectedTotal, requireNft } from './support/data';
 import {
   serverChangesNftPrice,
+  serverDropsConnectionsAndChangesPrice,
   serverReplaysNftUpdate,
   waitForCartFetchToSettle,
   waitForRealtimeConnection,
@@ -131,4 +132,21 @@ test('nft.updated atualiza a linha, avisa a mudança e recalcula o resumo', asyn
   await expect(
     page.getByRole('status').filter({ hasText: 'Preço atualizado em 1 item(ns) do carrinho.' }),
   ).toBeVisible();
+});
+
+test('queda de conexão: ao reconectar, o app se reconcilia com o REST', async ({ page }) => {
+  const card = await openCatalogCard(page);
+  await expect(card.getByText(formatEthLabel(nft.priceEth), { exact: true })).toBeVisible();
+
+  // O "servidor" cai E muda o preço: com todos fora, o evento não chega a
+  // ninguém (é o que acontece de verdade quando o Wi-Fi do usuário oscila).
+  const missed = await serverDropsConnectionsAndChangesPrice(page, { id: NFT_ID, priceEth: priceA });
+
+  // Sem conexão, nada de tempo real: a tela continua com o preço antigo…
+  await expect(card.getByText(formatEthLabel(nft.priceEth), { exact: true })).toBeVisible();
+
+  // …até o socket reconectar sozinho. Aí o app revalida com o REST (fonte da
+  // verdade) e passa a mostrar o preço novo — que NUNCA veio por evento.
+  await waitForRealtimeConnection(page);
+  await expect(card.getByText(formatEthLabel(missed.priceEth), { exact: true })).toBeVisible();
 });

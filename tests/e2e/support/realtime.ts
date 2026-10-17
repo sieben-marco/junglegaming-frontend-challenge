@@ -13,6 +13,7 @@ interface KurioRealtimeTools {
   changeNftPrice: (input: { id: string; priceEth: string }) => NftUpdateEvent;
   emitNftUpdate: (event: NftUpdateEvent) => void;
   connectedClientCount: () => number;
+  disconnectClients: () => number;
 }
 
 /** Espera o socket do app CONECTAR (sem `waitForTimeout`: observa o servidor). */
@@ -95,4 +96,26 @@ export async function waitForCartFetchToSettle(page: Page): Promise<void> {
       return Date.now() - idleSince >= 300;
     })
     .toBe(true);
+}
+
+/**
+ * O "servidor" CAI (derruba as conexões) e MUDA o preço — tudo numa única ida.
+ *
+ * Por que juntas: se fossem dois passos, o socket poderia reconectar entre eles e
+ * o app receberia o evento pelo tempo real. Aqui não existe essa janela — quando
+ * o preço muda, ninguém está escutando. É exatamente o buraco que a
+ * RECONCILIAÇÃO (invalidar + buscar no REST ao reconectar) precisa cobrir.
+ */
+export async function serverDropsConnectionsAndChangesPrice(
+  page: Page,
+  input: { id: string; priceEth: string },
+): Promise<NftUpdateEvent> {
+  return page.evaluate((payload) => {
+    const tools = (window as unknown as { __kurioMocks?: KurioRealtimeTools }).__kurioMocks;
+    if (!tools) throw new Error('window.__kurioMocks não está disponível (mocks desligados?)');
+    if (tools.disconnectClients() === 0) {
+      throw new Error('Ninguém estava conectado: o cenário de queda perderia o sentido');
+    }
+    return tools.changeNftPrice(payload);
+  }, input);
 }

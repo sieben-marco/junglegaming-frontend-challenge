@@ -19,7 +19,10 @@ import type { NftUpdateEvent } from '@/types/realtime';
  * O trabalho do listener:
  *  1. DESCARTAR eventos duplicados/antigos (o `version` é sempre crescente);
  *  2. aplicar o dado novo nos caches que já existem — catálogo (lista/detalhe),
- *     carrosséis e CARRINHO (linha + resumo) — sem refetch.
+ *     carrosséis e CARRINHO (linha + resumo) — sem refetch;
+ *  3. RECONCILIAR com o REST quando a conexão VOLTA: durante a queda o servidor
+ *     seguiu mudando e esses eventos se perderam, então quem reconta a história
+ *     é a API (invalidar + buscar).
  *
  * Por que aplicar no cache em vez de "invalidar e buscar de novo"? Porque o
  * evento já traz o dado novo — pedir de novo à API só para exibir o mesmo valor
@@ -48,6 +51,20 @@ function replacePrice(item: unknown, update: NftUpdateEvent): unknown {
     return { ...(item as Nft), priceEth: update.priceEth };
   }
   return item;
+}
+
+/**
+ * Reconciliação com o REST: depois de uma QUEDA de conexão, o app pode ter
+ * perdido eventos (o "servidor" seguiu mudando sem ninguém escutando). O REST é
+ * a fonte da verdade, então INVALIDAMOS os caches — a próxima leitura (imediata,
+ * porque as telas abertas estão "ativas") traz o estado atual.
+ *
+ * Aqui "invalidar" é o certo (e não `setQueryData`): não sabemos O QUE mudou
+ * enquanto estávamos fora; quem sabe é o servidor.
+ */
+function reconcileWithServer(queryClient: QueryClient): void {
+  void queryClient.invalidateQueries({ queryKey: catalogKeys.all });
+  void queryClient.invalidateQueries({ queryKey: cartKeys.all });
 }
 
 /** Aplica a mudança no detalhe, nas listagens e no carrinho JÁ em cache. */
@@ -88,6 +105,17 @@ export function useNftUpdates(): void {
       applyNftUpdate(queryClient, update);
     }
 
+    /**
+     * `connect` dispara na PRIMEIRA conexão e em cada RECONEXÃO. Só a partir da
+     * segunda vale reconciliar: na primeira não houve tempo de perder evento
+     * (as consultas acabaram de buscar os dados).
+     */
+    let connectedBefore = false;
+    function handleConnect(): void {
+      if (connectedBefore) reconcileWithServer(queryClient);
+      connectedBefore = true;
+    }
+
     // `createSocket` é assíncrono porque carrega o `socket.io-client` sob
     // demanda (ver o porquê em `lib/socket.ts`: o MSW precisa estar ativo
     // antes de o engine.io-client "fotografar" o WebSocket global).
@@ -99,6 +127,7 @@ export function useNftUpdates(): void {
 
       socket = created;
       socket.on('nft.updated', handleNftUpdate);
+      socket.on('connect', handleConnect);
 
       if (import.meta.env.DEV) {
         socket.on('connect_error', (error) => {
@@ -113,6 +142,7 @@ export function useNftUpdates(): void {
     return () => {
       disposed = true;
       socket?.off('nft.updated', handleNftUpdate);
+      socket?.off('connect', handleConnect);
       socket?.disconnect();
     };
   }, [queryClient]);

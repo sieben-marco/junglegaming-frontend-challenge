@@ -1,5 +1,5 @@
 import { resetMockDb } from './db';
-import { changeNftPrice, connectedClientCount, emitNftUpdate } from './realtime';
+import { changeNftPrice, connectedClientCount, disconnectClients, emitNftUpdate } from './realtime';
 import { mockScenarios, resetMockScenarios, type MockScenarioConfig } from './scenarios';
 
 /**
@@ -35,6 +35,11 @@ export interface KurioMockDevTools {
   emitNftUpdate: typeof emitNftUpdate;
   /** Conexões Socket.IO abertas (o "servidor" vê quem está escutando). */
   connectedClientCount: typeof connectedClientCount;
+  /**
+   * Derruba todas as conexões (simula queda de rede) — o app só volta quando o
+   * socket reconectar sozinho. Serve para exercitar a reconciliação.
+   */
+  disconnectClients: typeof disconnectClients;
 }
 
 /** Disponibiliza as ferramentas em `window.__kurioMocks` (apenas em DEV). */
@@ -49,5 +54,6 @@ export function exposeMockDevTools(): void {
     changeNftPrice,
     emitNftUpdate,
     connectedClientCount,
+    disconnectClients,
   };
 }
