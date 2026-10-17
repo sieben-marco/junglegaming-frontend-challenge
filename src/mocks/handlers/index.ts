@@ -1,14 +1,18 @@
 import { http, HttpResponse } from 'msw';
 import { catalogHandlers } from './catalog';
+import { cartHandlers } from './cart';
+import { favoritesHandlers } from './favorites';
 
 /**
  * Todos os handlers REST do MSW.
  *
- * Cada domínio (catálogo, sessão, carrinho, pedidos...) vive em seu próprio
- * arquivo e é combinado aqui. `src/mocks/browser.ts` monta o worker com esta
- * lista.
+ * Cada domínio (catálogo, carrinho, favoritos, sessão, pedidos...) vive em seu
+ * próprio arquivo e é combinado aqui. `src/mocks/browser.ts` monta o worker com
+ * esta lista.
  */
 export const handlers = [
   http.get('/api/health', () => HttpResponse.json({ status: 'ok' })),
   ...catalogHandlers,
+  ...cartHandlers,
+  ...favoritesHandlers,
 ];

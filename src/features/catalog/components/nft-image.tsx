@@ -1,5 +1,4 @@
 import { cn } from 'cn';
-import type { Nft } from '@/types/nft';
 
 /** Hash simples e estável: mesma string ⇒ mesma cor (placeholder consistente). */
 function hashString(value: string): number {
@@ -12,8 +11,20 @@ function hashString(value: string): number {
 }
 
 interface NftImageProps {
-  nft: Nft;
+  nft: NftImageSource;
   className?: string;
+}
+
+/**
+ * Campos mínimos para desenhar a arte. Definido ESTRUTURALMENTE (e não como
+ * `Nft`) para podermos reusar o componente com itens do carrinho, que carregam
+ * só o necessário (nome, número e imagem).
+ */
+export interface NftImageSource {
+  id: string;
+  name: string;
+  number: string;
+  imageUrl?: string;
 }
 
 /**
